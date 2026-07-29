@@ -181,7 +181,6 @@ export default function Reports() {
                 <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:360, background:C.card, border:`1px solid ${C.border}`, borderRadius:16 }}>
                     <div style={{ textAlign:"center" }}>
                         <p style={{ fontSize:15, fontWeight:600, color:C.text, margin:0 }}>Selecteaza un tip de raport</p>
-                        <p style={{ fontSize:13, color:C.textDim, marginTop:6 }}>Alege din grupele de mai sus si apasa Genereaza.</p>
                     </div>
                 </div>
             )}

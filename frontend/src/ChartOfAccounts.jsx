@@ -109,8 +109,9 @@ function authHeaders() {
 
 const EMPTY = { code: "", name: "", type: "EXPENSE", subType: "", parentId: "" };
 
-export default function ChartOfAccounts() {
+export default function ChartOfAccounts({ role }) {
     const T = useTheme();
+    const canEdit = role !== "VIEWER";
     const C = T ?? { text:"#d4d8e0", textMid:"#6b7280", textDim:"#374151", bg:"#0f1117", card:"#141820", border:"#1e2330", border2:"#252d3a", blue:"#7b9cba", isDark:true };
 
     const [accounts, setAccounts] = useState([]);
@@ -204,7 +205,7 @@ export default function ChartOfAccounts() {
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
                 <div>
                     <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, letterSpacing: "-0.5px", margin: 0 }}>Plan de conturi</h1>
-                    <p style={{ fontSize: 13, color: C.textDim, marginTop: 5 }}>{active.length} account{active.length !== 1 ? "s" : ""} · foundation of double-entry bookkeeping</p>
+                    <p style={{ fontSize: 13, color: C.textDim, marginTop: 5 }}>{active.length} de cont{active.length !== 1 ? "uri" : ""} </p>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px" }}>
@@ -215,9 +216,9 @@ export default function ChartOfAccounts() {
                         />
                         {search && <button style={{ background: "none", border: "none", color: C.textDim, cursor: "pointer", fontSize: 11, padding: 0 }} onClick={() => setSearch("")}>✕</button>}
                     </div>
-                    <button onClick={openCreate} style={{ display: "flex", alignItems: "center", gap: 7, background: "#7b9cba", border: "none", borderRadius: 10, padding: "9px 18px", color: C.isDark ? "#0a0f17" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
+                    {canEdit && <button onClick={openCreate} style={{ display: "flex", alignItems: "center", gap: 7, background: "#7b9cba", border: "none", borderRadius: 10, padding: "9px 18px", color: C.isDark ? "#0a0f17" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
                         <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 300 }}>+</span> Cont nou
-                    </button>
+                    </button>}
                 </div>
             </div>
 
@@ -283,7 +284,7 @@ export default function ChartOfAccounts() {
                                                 typeMeta={typeMeta}
                                                 classMeta={meta}
                                                 C={C}
-                                                onEdit={openEdit}
+                                                canEdit={canEdit} onEdit={openEdit}
                                                 onDelete={openDel}
                                                 onAnalytic={openAnalytic}
                                             />
@@ -306,7 +307,7 @@ export default function ChartOfAccounts() {
                                     <ClassAccRow key={a.id} acc={a} i={i} depth={0} isAnalytic={false}
                                                  typeMeta={TYPE_META[a.type] ?? { color: "#6b7280", bg: "#6b728018" }}
                                                  classMeta={{ color: "#6b7280", bg: "#6b728018" }}
-                                                 C={C} onEdit={openEdit} onDelete={openDel} onAnalytic={openAnalytic} />
+                                                 C={C} canEdit={canEdit} onEdit={openEdit} onDelete={openDel} onAnalytic={openAnalytic} />
                                 ))}
                                 </tbody>
                             </table>
@@ -339,7 +340,7 @@ export default function ChartOfAccounts() {
                                     </thead>
                                     <tbody>
                                     {list.map((a, i) => (
-                                        <AccRow key={a.id} acc={a} i={i} C={C} meta={meta} onEdit={openEdit} onDelete={openDel} onAnalytic={openAnalytic} />
+                                        <AccRow key={a.id} acc={a} i={i} C={C} meta={meta} canEdit={canEdit} onEdit={openEdit} onDelete={openDel} onAnalytic={openAnalytic} />
                                     ))}
                                     </tbody>
                                 </table>
@@ -463,7 +464,7 @@ export default function ChartOfAccounts() {
 }
 
 // ── ALL view row — indented, shows type badge ──────────────────────────────────
-function ClassAccRow({ acc, i, depth, isAnalytic, typeMeta, classMeta, C, onEdit, onDelete, onAnalytic }) {
+function ClassAccRow({ acc, i, depth, isAnalytic, typeMeta, classMeta, C, canEdit, onEdit, onDelete, onAnalytic }) {
     const indent = depth * 24; // 24px per level
 
     return (
@@ -518,18 +519,18 @@ function ClassAccRow({ acc, i, depth, isAnalytic, typeMeta, classMeta, C, onEdit
             {/* ACTIONS */}
             <td style={{ padding: "11px 20px", textAlign: "right" }}>
                 <div className="acc-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: 0, transition: "opacity 0.15s" }}>
-                    {acc.subType === "Sintetic" && (
+                    {acc.subType === "Sintetic" && canEdit && (
                         <button onClick={() => onAnalytic(acc)}
                                 style={{ background: `${classMeta.color}12`, border: `1px solid ${classMeta.color}30`, borderRadius: 8, padding: "5px 10px", color: classMeta.color, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif", display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 300 }}>+</span> Analitic
                         </button>
                     )}
-                    <button onClick={() => onEdit(acc)} style={{ background: "transparent", border: `1px solid ${C.border2}`, borderRadius: 8, padding: "5px 12px", color: C.textMid, fontSize: 12, cursor: "pointer", fontFamily: "'Outfit',sans-serif", display: "flex", alignItems: "center", gap: 5 }}>
+                    {canEdit && <button onClick={() => onEdit(acc)} style={{ background: "transparent", border: `1px solid ${C.border2}`, borderRadius: 8, padding: "5px 12px", color: C.textMid, fontSize: 12, cursor: "pointer", fontFamily: "'Outfit',sans-serif", display: "flex", alignItems: "center", gap: 5 }}>
                         <EditIcon /> Editează
-                    </button>
-                    <button onClick={() => onDelete(acc)} style={{ background: "transparent", border: "1px solid #b07a7a30", borderRadius: 8, padding: "5px 10px", color: "#b07a7a", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center" }}>
+                    </button>}
+                    {canEdit && <button onClick={() => onDelete(acc)} style={{ background: "transparent", border: "1px solid #b07a7a30", borderRadius: 8, padding: "5px 10px", color: "#b07a7a", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center" }}>
                         <DeleteIcon />
-                    </button>
+                    </button>}
                 </div>
             </td>
         </tr>
@@ -537,7 +538,7 @@ function ClassAccRow({ acc, i, depth, isAnalytic, typeMeta, classMeta, C, onEdit
 }
 
 // ── TYPE FILTER view row (unchanged) ──────────────────────────────────────────
-function AccRow({ acc, i, C, meta, onEdit, onDelete, onAnalytic }) {
+function AccRow({ acc, i, C, meta, canEdit, onEdit, onDelete, onAnalytic }) {
     return (
         <tr className="acc-row" style={{ borderBottom: `1px solid ${C.border}`, transition: "background 0.12s", animation: `fadeUp 0.3s ease ${i * 20}ms both` }}>
             <td style={{ padding: "12px 20px" }}>
@@ -559,18 +560,18 @@ function AccRow({ acc, i, C, meta, onEdit, onDelete, onAnalytic }) {
             </td>
             <td style={{ padding: "12px 20px", textAlign: "right" }}>
                 <div className="acc-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: 0, transition: "opacity 0.15s" }}>
-                    {acc.subType === "Sintetic" && (
+                    {acc.subType === "Sintetic" && canEdit && (
                         <button onClick={() => onAnalytic(acc)}
                                 style={{ background: `${meta.color}12`, border: `1px solid ${meta.color}30`, borderRadius: 8, padding: "5px 10px", color: meta.color, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif", display: "flex", alignItems: "center", gap: 4 }}>
                             <span style={{ fontSize: 14, lineHeight: 1, fontWeight: 300 }}>+</span> Analitic
                         </button>
                     )}
-                    <button onClick={() => onEdit(acc)} style={{ background: "transparent", border: `1px solid ${C.border2}`, borderRadius: 8, padding: "5px 12px", color: C.textMid, fontSize: 12, cursor: "pointer", fontFamily: "'Outfit',sans-serif", display: "flex", alignItems: "center", gap: 5 }}>
+                    {canEdit && <button onClick={() => onEdit(acc)} style={{ background: "transparent", border: `1px solid ${C.border2}`, borderRadius: 8, padding: "5px 12px", color: C.textMid, fontSize: 12, cursor: "pointer", fontFamily: "'Outfit',sans-serif", display: "flex", alignItems: "center", gap: 5 }}>
                         <EditIcon /> Editează
-                    </button>
-                    <button onClick={() => onDelete(acc)} style={{ background: "transparent", border: "1px solid #b07a7a30", borderRadius: 8, padding: "5px 10px", color: "#b07a7a", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center" }}>
+                    </button>}
+                    {canEdit && <button onClick={() => onDelete(acc)} style={{ background: "transparent", border: "1px solid #b07a7a30", borderRadius: 8, padding: "5px 10px", color: "#b07a7a", fontSize: 12, cursor: "pointer", display: "flex", alignItems: "center" }}>
                         <DeleteIcon />
-                    </button>
+                    </button>}
                 </div>
             </td>
         </tr>

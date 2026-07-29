@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -44,6 +45,7 @@ public class BankController {
 
     // POST /api/bank/accounts
     @PostMapping("/accounts")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<BankAccountResponse> createBankAccount(@RequestBody BankAccountRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(bankAccountService.createBankAccount(request));
@@ -51,6 +53,7 @@ public class BankController {
 
     // DELETE /api/bank/accounts/{id}
     @DeleteMapping("/accounts/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deactivateBankAccount(@PathVariable Integer id) {
         bankAccountService.deactivateBankAccount(id);
         return ResponseEntity.noContent().build();
@@ -81,6 +84,7 @@ public class BankController {
     // ============================================================
     @PostMapping(value = "/accounts/{bankAccountId}/import",
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<CsvImportResult> importCsv(
             @PathVariable Integer bankAccountId,
             @RequestParam("file") MultipartFile file) {
@@ -93,18 +97,21 @@ public class BankController {
 
     // POST /api/bank/match  — manual match
     @PostMapping("/match")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<BankTransactionResponse> manualMatch(@RequestBody ManualMatchRequest request) {
         return ResponseEntity.ok(reconciliationService.manualMatch(request));
     }
 
     // POST /api/bank/transactions/{id}/unmatch  — revert match
     @PostMapping("/transactions/{id}/unmatch")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<BankTransactionResponse> unmatch(@PathVariable Integer id) {
         return ResponseEntity.ok(reconciliationService.unmatch(id));
     }
 
     // POST /api/bank/accounts/{bankAccountId}/auto-match  — trigger auto match manually
     @PostMapping("/accounts/{bankAccountId}/auto-match")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> autoMatch(@PathVariable Integer bankAccountId) {
         reconciliationService.autoMatch(bankAccountId);
         return ResponseEntity.ok().build();

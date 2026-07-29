@@ -1,5 +1,6 @@
 package com.Accountancy.app.dto;
 
+import com.Accountancy.app.entities.User;
 import com.Accountancy.app.entities.User.Role;
 import jakarta.validation.constraints.*;
 import java.time.LocalDateTime;
@@ -19,6 +20,12 @@ public class UserDTO {
             String password,
 
             Role role
+    ) {}
+
+    public record UserResponse(
+            Integer id, String name, String email,
+            User.Role role, Boolean isActive, LocalDateTime createdAt,
+            User.Status status   // ← adaugă asta
     ) {}
 
     public record UpdateUserRequest(
@@ -41,8 +48,5 @@ public class UserDTO {
             String newPassword
     ) {}
 
-    public record UserResponse(
-            Integer id, String name, String email,
-            Role role, Boolean isActive, LocalDateTime createdAt
-    ) {}
+
 }

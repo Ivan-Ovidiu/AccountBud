@@ -124,6 +124,16 @@ public class BankOperationService {
         BankOperation saved = bankOperationRepository.save(operation);
         postJournalEntry(saved, user, company);
 
+        // Actualizeaza soldul contului bancar
+        BankAccount ba = bankAccount;
+        if (request.operationType() == OperationType.CLIENT_RECEIPT ||
+                request.operationType() == OperationType.INTEREST_INC) {
+            ba.setCurrentBalance(ba.getCurrentBalance().add(request.amount()));
+        } else {
+            ba.setCurrentBalance(ba.getCurrentBalance().subtract(request.amount()));
+        }
+        bankAccountRepository.save(ba);
+
         // Marcare factură furnizor ca PAID după plată
         if (request.operationType() == OperationType.SUPPLIER_PAYMENT
                 && request.supplierInvoiceId() != null) {
@@ -196,7 +206,18 @@ public class BankOperationService {
                     });
         }
 
-        // Pasul 3: sterge operatiunea
+
+        // Pasul 3: restaureaza soldul contului bancar
+        BankAccount ba = op.getBankAccount();
+        if (op.getOperationType() == OperationType.CLIENT_RECEIPT ||
+                op.getOperationType() == OperationType.INTEREST_INC) {
+            ba.setCurrentBalance(ba.getCurrentBalance().subtract(op.getAmount()));
+        } else {
+            ba.setCurrentBalance(ba.getCurrentBalance().add(op.getAmount()));
+        }
+        bankAccountRepository.save(ba);
+
+// Pasul 4: sterge operatiunea
         bankOperationRepository.delete(op);
     }
 

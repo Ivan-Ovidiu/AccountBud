@@ -29,8 +29,9 @@ function plusDays(n)   { const d = new Date(); d.setDate(d.getDate() + n); retur
 
 const EMPTY_FORM = { supplierId: "", expenseAccountId: "", taxRateId: "", customRate: "", invoiceNumber: "", issueDate: today(), dueDate: plusDays(30), subtotal: "", notes: "" };
 
-export default function SupplierInvoices() {
+export default function SupplierInvoices({ role }) {
     const T = useTheme();
+    const canEdit = role !== "VIEWER";
     const C = T ?? { text: "#d4d8e0", textMid: "#6b7280", textDim: "#374151", bg: "#0f1117", card: "#141820", border: "#1e2330", border2: "#252d3a", blue: "#7b9cba", green: "#7aab8a", red: "#b07a7a", isDark: true };
 
     const [invoices, setInvoices]       = useState([]);
@@ -238,9 +239,9 @@ export default function SupplierInvoices() {
 
             {/* HEADER */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-                <button onClick={openCreate} style={{ display: "flex", alignItems: "center", gap: 7, background: "#b07a7a", border: "none", borderRadius: 10, padding: "9px 18px", color: C.isDark ? "#0a0f17" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
+                {canEdit && <button onClick={openCreate} style={{ display: "flex", alignItems: "center", gap: 7, background: "#b07a7a", border: "none", borderRadius: 10, padding: "9px 18px", color: C.isDark ? "#0a0f17" : "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
                     <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 300 }}>+</span> Înregistrează Factură
-                </button>
+                </button>}
             </div>
 
             {/* SUMMARY CARDS */}
@@ -312,7 +313,7 @@ export default function SupplierInvoices() {
                                 </td>
                                 <td style={{ padding: "14px 20px", textAlign: "right" }}>
                                     <div className="sinv-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: 0, transition: "opacity 0.15s" }} onClick={e => e.stopPropagation()}>
-                                        {inv.status === "PENDING" && (
+                                        {inv.status === "PENDING" && canEdit && (
                                             <QuickBtn label="Înregistrează" color="#7b9cba" onClick={() => action(inv.id, "register")} />
                                         )}
                                     </div>
@@ -477,7 +478,7 @@ export default function SupplierInvoices() {
                                 <div style={{ display: "flex", gap: 8, paddingTop: 4, flexWrap: "wrap" }}>
 
                                     {/* PENDING → REGISTERED + EDIT */}
-                                    {selected.status === "PENDING" && (
+                                    {selected.status === "PENDING" && canEdit && (
                                         <>
                                             <button onClick={() => action(selected.id, "register")}
                                                     style={{ background: "#7b9cba", border: "none", borderRadius: 9, padding: "9px 18px", color: C.isDark ? "#0a0f17" : "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
@@ -523,7 +524,7 @@ export default function SupplierInvoices() {
 
 
                                     {/* Buton sterge — nu apare pentru PAID */}
-                                    {selected.status !== "PAID" && (
+                                    {selected.status !== "PAID" && canEdit && (
                                         <div style={{ width: "100%", borderTop: `1px solid ${C.border}`, paddingTop: 14, marginTop: 4, display: "flex", justifyContent: "flex-end" }}>
                                             <button onClick={() => setShowConfirm(true)} style={{
                                                 background: "#b07a7a0d", border: "1px solid #b07a7a30",

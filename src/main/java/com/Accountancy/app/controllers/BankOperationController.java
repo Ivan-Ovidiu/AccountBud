@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -33,12 +34,14 @@ public class BankOperationController {
 
     @Operation(summary = "Creeaza operatiune si posteaza nota contabila automat")
     @PostMapping
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<BankOperationResponse> createOperation(@RequestBody BankOperationRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(bankOperationService.createOperation(request));
     }
 
     @Operation(summary = "Sterge operatiune bancara: anuleaza nota contabila si reseteaza statusul facturii asociate")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deleteOperation(@PathVariable Integer id) {
         bankOperationService.deleteOperation(id);
         return ResponseEntity.noContent().build();

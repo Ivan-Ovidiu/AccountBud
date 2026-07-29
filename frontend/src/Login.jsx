@@ -6,39 +6,104 @@ const API_BASE = "http://localhost:8080";
 const SLIDES = [
     {
         image: "/Mountain_Cover.png",
-        quote: "Smart accounting\nfor your business.",
-        sub: "Automate your books, focus on growth.",
+        quote: "Contabilitate inteligentă\npentru afacerea ta.",
+        sub: "Automatizează evidența contabilă, concentrează-te pe creștere.",
     },
     {
         image: "/SunRise_Cover.png",
-        quote: "Real-time reports,\nzero manual work.",
-        sub: "P&L, Balance Sheet and Cash Flow — always up to date.",
+        quote: "Rapoarte în timp real,\nzero muncă manuală.",
+        sub: "Profit & Pierdere, Bilanț și Flux de Numerar toate la un click distanță",
     },
     {
         image: "/Sunset_Cover.png",
-        quote: "AI-powered insights\nat your fingertips.",
-        sub: "Anomaly detection, forecasting and natural language queries.",
+        quote: "Inteligență artificială\nla îndemâna ta.",
+        sub: "Detecție de anomalii și predicții",
     },
 ];
 
 export default function Login({ onLogin, onBack }) {
     const T = useTheme();
 
-    const [email, setEmail] = useState("");
-    const [password, setPassword] = useState("");
+    const [email, setEmail]               = useState("");
+    const [password, setPassword]         = useState("");
     const [showPassword, setShowPassword] = useState(false);
-    const [error, setError] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [phase, setPhase] = useState("login");
+    const [error, setError]               = useState("");
+    const [loading, setLoading]           = useState(false);
+    const [phase, setPhase]               = useState("login");   // "login" | "select" | "pending" | "rejected"
     const [preAuthToken, setPreAuthToken] = useState("");
-    const [companies, setCompanies] = useState([]);
-    const [userData, setUserData] = useState(null);
-    const [selLoading, setSelLoading] = useState(false);
+    const [companies, setCompanies]       = useState([]);
+    const [userData, setUserData]         = useState(null);
+    const [selLoading, setSelLoading]     = useState(false);
+    const [oauthName, setOauthName]       = useState("");
 
-    const [current, setCurrent] = useState(0);
-    const [next, setNext] = useState(null);
+    const [current, setCurrent]   = useState(0);
+    const [next, setNext]         = useState(null);
     const [nextOpacity, setNextOpacity] = useState(0);
     const timerRef = useRef(null);
+
+    // ── Detect OAuth2 callback redirect ───────────────────────────────────────
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get("status");
+        const name   = params.get("name");
+
+        if (status === "pending") {
+            setOauthName(name || "");
+            setPhase("pending");
+            window.history.replaceState({}, "", window.location.pathname);
+            return;
+        }
+        if (status === "rejected") {
+            setOauthName(name || "");
+            setPhase("rejected");
+            window.history.replaceState({}, "", window.location.pathname);
+            return;
+        }
+
+        // /select-company redirect from OAuth2SuccessHandler (ACTIVE user)
+        const preAuthToken = params.get("preAuthToken");
+        if (preAuthToken) {
+            const email = params.get("email") || "";
+            const uName = params.get("name")  || "";
+            const role  = params.get("role")  || "VIEWER";
+            setPreAuthToken(preAuthToken);
+            setUserData({ email, name: uName, role });
+            window.history.replaceState({}, "", window.location.pathname);
+            // fetch companies for this user
+            fetchCompaniesForOAuth(preAuthToken, email, uName, role);
+        }
+    }, []);
+
+    const fetchCompaniesForOAuth = async (token, email, name, role) => {
+        try {
+            const res = await fetch(`${API_BASE}/api/auth/select-company`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                body: JSON.stringify({ companyId: null }),  // just to get company list via /me or re-use login flow
+            });
+            // We can't use select-company without a companyId.
+            // Instead, call /api/auth/me with the pre-auth token to get companies list.
+            // Actually we need the companies — fetch them directly.
+            const companiesRes = await fetch(`${API_BASE}/api/companies`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (companiesRes.ok) {
+                const data = await companiesRes.json();
+                setCompanies(Array.isArray(data) ? data : []);
+                if (data.length === 1) {
+                    await selectCompany(token, data[0].id);
+                } else {
+                    setPhase("select");
+                }
+            } else {
+                setCompanies([]);
+                setPhase("select");
+            }
+        } catch {
+            setCompanies([]);
+            setPhase("select");
+        }
+    };
 
     const goTo = (idx) => {
         if (idx === current || next !== null) return;
@@ -54,17 +119,15 @@ export default function Login({ onLogin, onBack }) {
         return () => clearInterval(timerRef.current);
     }, [current]);
 
-    const switchMode = (m) => { setError(""); };
-
     const handleLogin = async () => {
-        if (!email || !password) { setError("Please fill in all fields."); return; }
+        if (!email || !password) { setError("Te rog completează toate câmpurile."); return; }
         setError(""); setLoading(true);
         try {
             const res = await fetch(`${API_BASE}/api/auth/login`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ email, password }),
             });
-            if (!res.ok) { setError("Invalid email or password."); setLoading(false); return; }
+            if (!res.ok) { setError("Email sau parolă incorectă."); setLoading(false); return; }
             const data = await res.json();
             setPreAuthToken(data.preAuthToken);
             setUserData({ email: data.email, name: data.name, role: data.role });
@@ -74,7 +137,7 @@ export default function Login({ onLogin, onBack }) {
             } else {
                 setPhase("select");
             }
-        } catch { setError("Could not connect to server."); }
+        } catch { setError("Nu s-a putut conecta la server."); }
         setLoading(false);
     };
 
@@ -86,81 +149,89 @@ export default function Login({ onLogin, onBack }) {
                 headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
                 body: JSON.stringify({ companyId }),
             });
-            if (!res.ok) { setError("Could not select company."); setSelLoading(false); return; }
+            if (!res.ok) { setError("Nu s-a putut selecta societatea."); setSelLoading(false); return; }
             const data = await res.json();
             localStorage.setItem("token", data.token);
-            localStorage.setItem("user", JSON.stringify({ email: data.email, name: data.name, role: data.role, companyId: data.companyId, companyName: data.companyName, companyCode: data.companyCode }));
+            localStorage.setItem("user", JSON.stringify({
+                email: data.email, name: data.name, role: data.role,
+                companyId: data.companyId, companyName: data.companyName, companyCode: data.companyCode,
+            }));
             if (onLogin) onLogin(data);
-        } catch { setError("Could not connect to server."); }
+        } catch { setError("Nu s-a putut conecta la server."); }
         setSelLoading(false);
     };
 
-    const handleRegister = async () => {};
-
-    // ── Culori bazate pe tema curenta ─────────────────────────────────────────
+    // ── Theme colors ──────────────────────────────────────────────────────────
     const isDark = T?.isDark ?? true;
 
     const colors = isDark ? {
-        // dark — identic cu originalul
-        root:        "#16161e",
-        formPanel:   "#16161e",
-        tabs:        "#1f1f2e",
-        tabActive:   "#2e2e45",
+        root:         "#16161e",
+        formPanel:    "#f0f3fa",
+        tabs:         "#1f1f2e",
+        tabActive:    "#2e2e45",
         tabActiveText:"#f0f0f8",
-        tabText:     "#5a5a7a",
-        title:       "#f0f0f8",
-        subtitle:    "#6b6b8a",
-        label:       "#9090b0",
-        input:       "#1f1f2e",
-        inputBorder: "#2a2a40",
-        inputText:   "#f0f0f8",
-        backBtn:     "#5a5a7a",
-        divLine:     "#2a2a40",
-        divText:     "#4a4a6a",
-        googleBtn:   "#1f1f2e",
-        googleBorder:"#2a2a40",
-        googleText:  "#d0d0e8",
-        placeholder: "#4a4a6a",
-        focusBorder: "#a78bfa",
-        focusShadow: "rgba(167,139,250,0.12)",
-        errBg:       "#2a1520",
-        errBorder:   "#6b2030",
-        errText:     "#f87171",
-        okBg:        "#0d2a1a",
-        okBorder:    "#1a6b3a",
-        okText:      "#4ade80",
+        tabText:      "#5a5a7a",
+        title:        "#f0f0f8",
+        subtitle:     "#6b6b8a",
+        label:        "#9090b0",
+        input:        "#1f1f2e",
+        inputBorder:  "#2a2a40",
+        inputText:    "#f0f0f8",
+        backBtn:      "#5a5a7a",
+        divLine:      "#2a2a40",
+        divText:      "#4a4a6a",
+        googleBtn:    "#1f1f2e",
+        googleBorder: "#2a2a40",
+        googleText:   "#d0d0e8",
+        placeholder:  "#4a4a6a",
+        focusBorder:  "#a78bfa",
+        focusShadow:  "rgba(167,139,250,0.12)",
+        errBg:        "#2a1520",
+        errBorder:    "#6b2030",
+        errText:      "#f87171",
+        okBg:         "#0d2a1a",
+        okBorder:     "#1a6b3a",
+        okText:       "#4ade80",
+        pendingBg:    "#1a1a2e",
+        pendingBorder:"#3a3a6a",
+        pendingText:  "#a0a0d0",
+        cardBg:       "#1f1f2e",
+        cardBorder:   "#2a2a40",
     } : {
-        // light
-        root:        "#f0f3fa",
-        formPanel:   "#ffffff",
-        tabs:        "#e8edf5",
-        tabActive:   "#ffffff",
+        root:         "#f0f3fa",
+        formPanel:    "#f0f3fa",
+        tabs:         "#e8edf5",
+        tabActive:    "#ffffff",
         tabActiveText:"#0d1426",
-        tabText:     "#8a99b8",
-        title:       "#0d1426",
-        subtitle:    "#526080",
-        label:       "#526080",
-        input:       "#f8fafc",
-        inputBorder: "#c8d3ec",
-        inputText:   "#0d1426",
-        backBtn:     "#526080",
-        divLine:     "#e1e7f5",
-        divText:     "#96a3be",
-        googleBtn:   "#f8fafc",
-        googleBorder:"#c8d3ec",
-        googleText:  "#0d1426",
-        placeholder: "#96a3be",
-        focusBorder: "#3b7cb5",
-        focusShadow: "rgba(59,124,181,0.12)",
-        errBg:       "#fff0f0",
-        errBorder:   "#f0a0a0",
-        errText:     "#a03030",
-        okBg:        "#f0faf4",
-        okBorder:    "#a0d0b0",
-        okText:      "#2d7a56",
+        tabText:      "#8a99b8",
+        title:        "#0d1426",
+        subtitle:     "#526080",
+        label:        "#526080",
+        input:        "#f8fafc",
+        inputBorder:  "#c8d3ec",
+        inputText:    "#0d1426",
+        backBtn:      "#526080",
+        divLine:      "#e1e7f5",
+        divText:      "#96a3be",
+        googleBtn:    "#f8fafc",
+        googleBorder: "#c8d3ec",
+        googleText:   "#0d1426",
+        placeholder:  "#96a3be",
+        focusBorder:  "#3b7cb5",
+        focusShadow:  "rgba(59,124,181,0.12)",
+        errBg:        "#fff0f0",
+        errBorder:    "#f0a0a0",
+        errText:      "#a03030",
+        okBg:         "#f0faf4",
+        okBorder:     "#a0d0b0",
+        okText:       "#2d7a56",
+        pendingBg:    "#f0f4ff",
+        pendingBorder:"#c0ccee",
+        pendingText:  "#3a4a7a",
+        cardBg:       "#ffffff",
+        cardBorder:   "#dde4f0",
     };
 
-    // ── Stiluri dinamice (exact aceeasi structura, doar valorile se schimba) ──
     const s = {
         root:       { display:"flex", minHeight:"100vh", fontFamily:"'Outfit', sans-serif", background:colors.root },
         artPanel:   { flex:"0 0 46%", position:"relative", overflow:"hidden" },
@@ -176,17 +247,13 @@ export default function Login({ onLogin, onBack }) {
         formPanel:  { flex:1, display:"flex", alignItems:"center", justifyContent:"center", background:colors.formPanel, padding:"48px 40px", overflowY:"auto" },
         formInner:  { width:"100%", maxWidth:400, display:"flex", flexDirection:"column", gap:20, animation:"fadeUp 0.4s ease both" },
         backBtn:    { display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", color:colors.backBtn, fontSize:13, fontFamily:"'Outfit', sans-serif", padding:"4px 0", width:"fit-content", transition:"color 0.2s" },
-        tabs:       { display:"flex", background:colors.tabs, borderRadius:12, padding:4, gap:4 },
-        tab:        { flex:1, padding:"10px", fontSize:14, fontWeight:500, border:"none", borderRadius:9, cursor:"pointer", background:"transparent", color:colors.tabText, fontFamily:"'Outfit', sans-serif", transition:"all 0.2s" },
-        tabActive:  { background:colors.tabActive, color:colors.tabActiveText },
-        formTop:    { display:"flex", flexDirection:"column", gap:6 },
         title:      { fontSize:28, fontWeight:700, color:colors.title, letterSpacing:"-0.8px", lineHeight:1.1 },
         subtitle:   { fontSize:13, color:colors.subtitle },
         field:      { display:"flex", flexDirection:"column", gap:7 },
         label:      { fontSize:13, fontWeight:500, color:colors.label, letterSpacing:"0.2px" },
         input:      { width:"100%", background:colors.input, border:`1.5px solid ${colors.inputBorder}`, borderRadius:12, padding:"12px 16px", fontSize:15, color:colors.inputText, transition:"border-color .2s, box-shadow .2s", fontFamily:"'Outfit', sans-serif" },
         eyeBtn:     { position:"absolute", right:14, top:"50%", transform:"translateY(-50%)", background:"none", border:"none", cursor:"pointer", color:colors.backBtn, display:"flex", alignItems:"center", padding:0 },
-        submitBtn:  { width:"100%", background:"linear-gradient(135deg, #7c3aed 0%, #a78bfa 100%)", color:"#fff", border:"none", borderRadius:12, padding:"14px 20px", fontSize:15, fontWeight:600, fontFamily:"'Outfit', sans-serif", cursor:"pointer", transition:"opacity .2s" },
+        submitBtn:  { width:"100%", background:"#7c3aed", color:"#fff", border:"none", borderRadius:12, padding:"14px 20px", fontSize:15, fontWeight:600, fontFamily:"'Outfit', sans-serif", cursor:"pointer", transition:"opacity .2s" },
         divider:    { display:"flex", alignItems:"center", gap:12 },
         divLine:    { flex:1, height:1, background:colors.divLine },
         divText:    { fontSize:12, color:colors.divText, whiteSpace:"nowrap" },
@@ -197,16 +264,16 @@ export default function Login({ onLogin, onBack }) {
         <div style={s.root}>
             {/* LEFT: sliding artwork */}
             <div style={s.artPanel}>
-                <div style={{ ...s.artBg, backgroundImage: `url(${SLIDES[current].image})`, opacity: 1, zIndex: 1 }} />
+                <div style={{ ...s.artBg, backgroundImage:`url(${SLIDES[current].image})`, opacity:1, zIndex:1 }} />
                 {next !== null && (
-                    <div style={{ ...s.artBg, backgroundImage: `url(${SLIDES[next].image})`, opacity: nextOpacity, zIndex: 2, transition: "opacity 0.9s ease" }} />
+                    <div style={{ ...s.artBg, backgroundImage:`url(${SLIDES[next].image})`, opacity:nextOpacity, zIndex:2, transition:"opacity 0.9s ease" }} />
                 )}
-                <div style={{ ...s.artOverlay, zIndex: 3 }} />
-                <div style={{ ...s.artContent, zIndex: 4 }}>
+                <div style={{ ...s.artOverlay, zIndex:3 }} />
+                <div style={{ ...s.artContent, zIndex:4 }}>
                     <div style={s.logoRow}>
-                        <img src="/Logo.svg" alt="AccountBud" style={{ height: 32, width: "auto", filter: "brightness(0) invert(1)" }} />
+                        <img src="/Logo.svg" alt="AccountBud" style={{ height:32, width:"auto", filter:"brightness(0) invert(1)" }} />
                     </div>
-                    <div style={{ ...s.quoteBlock, opacity: next !== null ? 0 : 1, transition: "opacity 0.4s ease" }}>
+                    <div style={{ ...s.quoteBlock, opacity:next !== null ? 0 : 1, transition:"opacity 0.4s ease" }}>
                         <p style={s.quote}>
                             {SLIDES[current].quote.split("\n").map((line, i) => <span key={i}>{line}<br /></span>)}
                         </p>
@@ -214,7 +281,7 @@ export default function Login({ onLogin, onBack }) {
                     </div>
                     <div style={s.dots}>
                         {SLIDES.map((_, i) => (
-                            <button key={i} onClick={() => goTo(i)} style={{ ...s.dot, width: i === current ? 24 : 6, background: i === current ? "#fff" : "rgba(255,255,255,0.35)" }} />
+                            <button key={i} onClick={() => goTo(i)} style={{ ...s.dot, width:i === current ? 24 : 6, background:i === current ? "#fff" : "rgba(255,255,255,0.35)" }} />
                         ))}
                     </div>
                 </div>
@@ -224,35 +291,43 @@ export default function Login({ onLogin, onBack }) {
             <div style={s.formPanel}>
                 <div style={s.formInner}>
 
-                    <button onClick={onBack} style={s.backBtn}>
-                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-                            <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                        </svg>
-                        Back to Home
-                    </button>
+                    {/* ── PENDING PHASE ── */}
+                    {phase === "pending" && (
+                        <PendingScreen name={oauthName} colors={colors} onBack={() => { setPhase("login"); setOauthName(""); }} />
+                    )}
 
-
+                    {/* ── REJECTED PHASE ── */}
+                    {phase === "rejected" && (
+                        <RejectedScreen name={oauthName} colors={colors} onBack={() => { setPhase("login"); setOauthName(""); }} />
+                    )}
 
                     {/* ── LOGIN PHASE ── */}
                     {phase === "login" && (
                         <>
-                            <div style={s.formTop}>
-                                <h2 style={s.title}>Welcome back</h2>
+                            <button onClick={onBack} style={s.backBtn}>
+                                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                                    <path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                                Înapoi la pagina principală
+                            </button>
+
+                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                                <h2 style={s.title}>Bine ai revenit</h2>
                             </div>
 
                             <div style={s.field}>
                                 <label style={s.label}>Email</label>
                                 <input style={s.input} type="email" placeholder="" value={email}
-                                       onChange={(e) => setEmail(e.target.value)}
-                                       onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
+                                       onChange={e => setEmail(e.target.value)}
+                                       onKeyDown={e => e.key === "Enter" && handleLogin()} />
                             </div>
 
                             <div style={s.field}>
-                                <label style={s.label}>Password</label>
-                                <div style={{ position: "relative" }}>
+                                <label style={s.label}>Parolă</label>
+                                <div style={{ position:"relative" }}>
                                     <input style={s.input} type={showPassword ? "text" : "password"} placeholder=""
-                                           value={password} onChange={(e) => setPassword(e.target.value)}
-                                           onKeyDown={(e) => e.key === "Enter" && handleLogin()} />
+                                           value={password} onChange={e => setPassword(e.target.value)}
+                                           onKeyDown={e => e.key === "Enter" && handleLogin()} />
                                     <button style={s.eyeBtn} onClick={() => setShowPassword(!showPassword)}>
                                         {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                                     </button>
@@ -261,19 +336,19 @@ export default function Login({ onLogin, onBack }) {
 
                             {error && <ErrorBox message={error} colors={colors} />}
 
-                            <button style={{ ...s.submitBtn, opacity: loading ? 0.75 : 1 }} onClick={handleLogin} disabled={loading}>
-                                {loading ? <Spinner text="Signing in..." /> : "Sign In"}
+                            <button style={{ ...s.submitBtn, opacity:loading ? 0.75 : 1 }} onClick={handleLogin} disabled={loading}>
+                                {loading ? <Spinner text="Se autentifică..." /> : "Autentificare"}
                             </button>
 
                             <div style={s.divider}>
                                 <span style={s.divLine} />
-                                <span style={s.divText}>or continue with</span>
+                                <span style={s.divText}>sau continuă cu</span>
                                 <span style={s.divLine} />
                             </div>
 
-                            <button style={s.googleBtn} onClick={() => { window.location.href = "http://localhost:8080/oauth2/authorization/google"; }}>
+                            <button style={s.googleBtn} onClick={() => { window.location.href = `${API_BASE}/oauth2/authorization/google`; }}>
                                 <GoogleIcon />
-                                Sign in with Google
+                                Autentificare cu Google
                             </button>
                         </>
                     )}
@@ -281,11 +356,10 @@ export default function Login({ onLogin, onBack }) {
                     {/* ── COMPANY SELECT PHASE ── */}
                     {phase === "select" && (
                         <>
-                            <div style={s.formTop}>
+                            <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
                                 <h2 style={s.title}>Selectează societatea</h2>
                                 <p style={s.subtitle}>
-                                    {userData?.name && `Bun venit, ${userData.name}. `}
-                                    {companies.length === 0 ? "Nu ai acces la nicio societate. Contactează administratorul." : "Alege societatea cu care vrei să lucrezi."}
+                                    {companies.length === 0 ? "Nu ai acces la nicio societate. Contactează administratorul." : ""}
                                 </p>
                             </div>
 
@@ -315,7 +389,6 @@ export default function Login({ onLogin, onBack }) {
                             </button>
                         </>
                     )}
-
                 </div>
             </div>
 
@@ -328,11 +401,67 @@ export default function Login({ onLogin, onBack }) {
         button:focus { outline: none; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes fadeUp { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.5; } }
       `}</style>
         </div>
     );
 }
 
+// ── Pending screen ────────────────────────────────────────────────────────────
+function PendingScreen({ name, colors, onBack }) {
+    return (
+        <div style={{ display:"flex", flexDirection:"column", gap:24, alignItems:"center", textAlign:"center" }}>
+            <div style={{ width:72, height:72, borderRadius:"50%", background:`${colors.pendingBg}`, border:`2px solid ${colors.pendingBorder}`, display:"flex", alignItems:"center", justifyContent:"center", animation:"pulse 2s ease infinite" }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke={colors.pendingText} strokeWidth="1.5"/>
+                    <path d="M12 7v5l3 3" stroke={colors.pendingText} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <h2 style={{ fontSize:22, fontWeight:700, color:colors.title, letterSpacing:"-0.5px" }}>
+                    Cerere trimisă{name ? `, ${name.split(" ")[0]}` : ""}
+                </h2>
+                <p style={{ fontSize:14, color:colors.subtitle, lineHeight:1.7, maxWidth:320 }}>
+                    Contul tău Google a fost înregistrat și <strong>așteaptă aprobarea unui administrator</strong>.
+                    Vei putea accesa aplicația după ce cererea este aprobată.
+                </p>
+            </div>
+            <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", color:colors.backBtn, fontSize:13, fontFamily:"'Outfit', sans-serif" }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Înapoi la autentificare
+            </button>
+        </div>
+    );
+}
+
+// ── Rejected screen ───────────────────────────────────────────────────────────
+function RejectedScreen({ name, colors, onBack }) {
+    return (
+        <div style={{ display:"flex", flexDirection:"column", gap:24, alignItems:"center", textAlign:"center" }}>
+            <div style={{ width:72, height:72, borderRadius:"50%", background:colors.errBg, border:`2px solid ${colors.errBorder}`, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="9" stroke={colors.errText} strokeWidth="1.5"/>
+                    <path d="M15 9l-6 6M9 9l6 6" stroke={colors.errText} strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+            </div>
+            <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                <h2 style={{ fontSize:22, fontWeight:700, color:colors.title, letterSpacing:"-0.5px" }}>
+                    Acces refuzat{name ? `, ${name.split(" ")[0]}` : ""}
+                </h2>
+                <p style={{ fontSize:14, color:colors.subtitle, lineHeight:1.7, maxWidth:320 }}>
+                    Cererea ta de acces a fost <strong>respinsă de administrator</strong>.
+                    Dacă crezi că e o eroare, contactează administratorul firmei.
+                </p>
+            </div>
+            <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", cursor:"pointer", color:colors.backBtn, fontSize:13, fontFamily:"'Outfit', sans-serif" }}>
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M10 3L5 8l5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                Înapoi la autentificare
+            </button>
+        </div>
+    );
+}
+
+// ── Shared helpers ────────────────────────────────────────────────────────────
 function GoogleIcon() {
     return (
         <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
@@ -347,15 +476,7 @@ function GoogleIcon() {
 function ErrorBox({ message, colors }) {
     return (
         <div style={{ display:"flex", alignItems:"center", gap:8, background:colors.errBg, border:`1.5px solid ${colors.errBorder}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:colors.errText }}>
-            <span>⚠</span> {message}
-        </div>
-    );
-}
-
-function SuccessBox({ message, colors }) {
-    return (
-        <div style={{ display:"flex", alignItems:"center", gap:8, background:colors.okBg, border:`1.5px solid ${colors.okBorder}`, borderRadius:10, padding:"10px 14px", fontSize:13, color:colors.okText }}>
-            <span>✓</span> {message}
+            <span>&#x26A0;</span> {message}
         </div>
     );
 }

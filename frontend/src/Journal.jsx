@@ -1,6 +1,6 @@
 import { useTheme } from "./App";
 import { useState, useEffect, useCallback } from "react";
-
+import { useMLPredict } from "./MLPredictionBadge";
 const API_BASE = "http://localhost:8080";
 
 const TEMPLATES = [
@@ -41,13 +41,146 @@ const SOURCE_FILTERS = [
     { key:"NOTE",   label:"Note manuale" },
     { key:"JE-INV", label:"Facturi emise" },
     { key:"SINV",   label:"Facturi primite" },
-    { key:"PAY",    label:"Plăți furnizori" },
-    { key:"EXP",    label:"Cheltuieli" },
     { key:"BANK",   label:"Operațiuni bancă" },
     { key:"CLOSE",  label:"Închidere lună" },
 ];
 
 const EMPTY_LINE = { accountId:"", debitAmount:"", creditAmount:"", description:"" };
+
+/* ── AI Prediction Block ─────────────────────────────────────────────────── */
+function AIPredictionBlock({ prediction, isLoading, feedbackResult, accounts, lines, setLine, description, onFeedback, C }) {
+    const [correcting, setCorrecting] = useState(false);
+    const [manualCode, setManualCode] = useState("");
+
+    if (!prediction && !isLoading) return null;
+
+    const conf = prediction?.confidence ?? 0;
+    const confColor = conf > 0.78 ? "#7aab8a" : conf > 0.5 ? "#b09a6a" : "#b07a7a";
+    const confLabel = conf > 0.78 ? "înaltă" : conf > 0.5 ? "medie" : "scăzută";
+    const confPct = Math.round(conf * 100);
+    const barWidth = confPct;
+
+    const handleApply = () => {
+        const code = prediction.accountCode || prediction.account_code;
+        const acc = accounts.find(a => a.code === code || a.code.startsWith(code));
+        const idx = lines.findIndex(l => !l.accountId);
+        if (acc && idx !== -1) setLine(idx, "accountId", String(acc.id));
+        setCorrecting(false);
+    };
+
+    const handleCorrect = () => {
+        if (!manualCode.trim()) return;
+        onFeedback(manualCode.trim());
+        setCorrecting(false);
+        setManualCode("");
+    };
+
+    return (
+        <div style={{
+            position: "relative",
+            overflow: "hidden",
+            borderRadius: 10,
+            border: `1px solid ${C.border2}`,
+            background: C.isDark ? "#0d1020" : "#f7f8fc",
+            marginTop: 2,
+        }}>
+            {/* Gradient bar de fundal — efect subtil */}
+            <div style={{
+                position: "absolute", inset: 0,
+                background: C.isDark
+                    ? "linear-gradient(135deg, rgba(167,139,250,0.04) 0%, rgba(123,156,186,0.03) 100%)"
+                    : "linear-gradient(135deg, rgba(167,139,250,0.06) 0%, rgba(123,156,186,0.04) 100%)",
+                pointerEvents: "none",
+            }}/>
+
+            {/* Linia de confidenta din stanga */}
+            <div style={{
+                position: "absolute", left: 0, top: 0, bottom: 0, width: 2,
+                background: `linear-gradient(180deg, ${confColor}90 0%, ${confColor}20 100%)`,
+            }}/>
+
+            <div style={{ position: "relative", padding: "12px 14px 12px 16px" }}>
+                {isLoading ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <LoadingDots C={C}/>
+                        <span style={{ fontSize: 12, color: C.textMid }}>Analizez descrierea...</span>
+                    </div>
+                ) : (
+                    <>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontSize: 10, color: C.textDim, textTransform: "uppercase", letterSpacing: "0.8px", fontWeight: 600 }}>Sugestie </span>
+                                <span style={{ fontSize: 12, fontFamily: "monospace", fontWeight: 700, color: C.text }}>
+                                    {prediction.accountCode || prediction.account_code}
+                                </span>
+                            </div>
+                            {/* Bara de confidenta */}
+                            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ width: 48, height: 3, borderRadius: 99, background: C.border2, overflow: "hidden" }}>
+                                    <div style={{ height: "100%", width: `${barWidth}%`, background: confColor, borderRadius: 99, transition: "width 0.6s cubic-bezier(0.16,1,0.3,1)" }}/>
+                                </div>
+                                <span style={{ fontSize: 11, color: confColor, fontWeight: 600, minWidth: 28 }}>{confPct}%</span>
+
+                            </div>
+                        </div>
+
+                        {prediction.top3?.length > 1 && (
+                            <div style={{ display: "flex", gap: 4, marginBottom: 10, flexWrap: "wrap" }}>
+                                {prediction.top3.slice(1).map(t => (
+                                    <span key={t.code} style={{ fontSize: 10, fontFamily: "monospace", color: C.textDim, background: C.border, border: `1px solid ${C.border2}`, borderRadius: 4, padding: "2px 6px" }}>
+                                        {t.code} · {Math.round(t.prob * 100)}%
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        {!correcting ? (
+                            <div style={{ display: "flex", gap: 6 }}>
+                                <button onClick={handleApply} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, background: C.accent, color: C.isDark ? "#0b0e14" : "#fff", border: "none", cursor: "pointer", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>
+                                    Aplică cont
+                                </button>
+                                <button onClick={() => setCorrecting(true)} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, background: "transparent", color: C.textMid, border: `1px solid ${C.border2}`, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
+                                    Corectează
+                                </button>
+                                {feedbackResult && (
+                                    <span style={{ fontSize: 11, color: "#7aab8a", alignSelf: "center", marginLeft: 4 }}>Feedback salvat</span>
+                                )}
+                            </div>
+                        ) : (
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                <input
+                                    autoFocus
+                                    type="text"
+                                    placeholder="Cod cont corect (ex: 612)"
+                                    value={manualCode}
+                                    onChange={e => setManualCode(e.target.value)}
+                                    onKeyDown={e => { if (e.key === "Enter") handleCorrect(); if (e.key === "Escape") setCorrecting(false); }}
+                                    style={{ fontSize: 12, padding: "5px 10px", borderRadius: 6, width: 170, border: `1px solid ${C.border2}`, background: C.bg, color: C.text, fontFamily: "'Outfit',sans-serif", outline: "none" }}
+                                />
+                                <button onClick={handleCorrect} style={{ fontSize: 11, padding: "5px 12px", borderRadius: 6, background: "#7aab8a", color: "#fff", border: "none", cursor: "pointer", fontFamily: "'Outfit',sans-serif", fontWeight: 600 }}>
+                                    Trimite
+                                </button>
+                                <button onClick={() => setCorrecting(false)} style={{ fontSize: 11, padding: "5px 10px", borderRadius: 6, background: "transparent", color: C.textMid, border: `1px solid ${C.border2}`, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
+                                    Anulare
+                                </button>
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
+        </div>
+    );
+}
+
+function LoadingDots({ C }) {
+    return (
+        <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+            {[0, 1, 2].map(i => (
+                <div key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: C.textDim, animation: `dotPulse 1.2s ease-in-out ${i * 0.2}s infinite` }}/>
+            ))}
+        </div>
+    );
+}
 
 export default function JurnalContabil() {
     const T = useTheme();
@@ -67,6 +200,8 @@ export default function JurnalContabil() {
     const [entryDate, setDate]    = useState(today());
     const [lines, setLines]       = useState([{...EMPTY_LINE},{...EMPTY_LINE}]);
     const [saving, setSaving]     = useState(false);
+    const token = localStorage.getItem("token");
+    const { prediction, isLoading, predict, submitFeedback, feedbackResult } = useMLPredict(token);
     const [err, setErr]           = useState("");
 
     const load = useCallback(() => {
@@ -163,7 +298,7 @@ export default function JurnalContabil() {
                     {!showClosePanel && (
                         <button onClick={()=>setSortDir(d=>d==="desc"?"asc":"desc")}
                                 style={{ background:C.card, border:`1px solid ${C.border2}`, borderRadius:10, padding:"9px 14px", color:C.textMid, fontSize:12, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
-                            {sortDir==="desc"?"↓ Recente":"↑ Vechi"}
+                            {sortDir==="desc"?"Recente":"Vechi"}
                         </button>
                     )}
                     <button onClick={openCreate}
@@ -255,8 +390,38 @@ export default function JurnalContabil() {
                             <div style={{ display:"flex", gap:12 }}>
                                 <div style={{ flex:2, display:"flex", flexDirection:"column", gap:6 }}>
                                     <label style={{ fontSize:11, color:C.textMid, textTransform:"uppercase", letterSpacing:"0.5px", fontWeight:500 }}>Descriere *</label>
-                                    <input value={description} onChange={e=>setDesc(e.target.value)} placeholder="Ex: Amortizare lunară, Salarii noiembrie..."
-                                           style={iS()} onFocus={e=>e.target.style.borderColor=C.accent} onBlur={e=>e.target.style.borderColor=C.border2}/>
+                                    <input
+                                        value={description}
+                                        onChange={e => {
+                                            setDesc(e.target.value);
+                                            predict(e.target.value, lines[0]?.debitAmount || lines[0]?.creditAmount || 0);
+                                        }}
+                                        placeholder=""
+                                        style={iS()}
+                                        onFocus={e => e.target.style.borderColor = C.accent}
+                                        onBlur={e => e.target.style.borderColor = C.border2}
+                                    />
+                                    <AIPredictionBlock
+                                        prediction={prediction}
+                                        isLoading={isLoading}
+                                        feedbackResult={feedbackResult}
+                                        accounts={accounts}
+                                        lines={lines}
+                                        setLine={setLine}
+                                        description={description}
+                                        onFeedback={(correctCode) => {
+                                            submitFeedback(
+                                                description,
+                                                parseFloat(
+                                                    lines.find(l => parseFloat(l.debitAmount) > 0)?.debitAmount ||
+                                                    lines.find(l => parseFloat(l.creditAmount) > 0)?.creditAmount || 0
+                                                ),
+                                                prediction.accountCode || prediction.account_code,
+                                                correctCode
+                                            );
+                                        }}
+                                        C={C}
+                                    />
                                 </div>
                                 <div style={{ flex:1, display:"flex", flexDirection:"column", gap:6 }}>
                                     <label style={{ fontSize:11, color:C.textMid, textTransform:"uppercase", letterSpacing:"0.5px", fontWeight:500 }}>Data *</label>
@@ -300,7 +465,7 @@ export default function JurnalContabil() {
                                 ))}
                                 <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:formOk?"#7aab8a0a":formDebit===0?C.isDark?"rgba(255,255,255,0.02)":"rgba(0,0,0,0.02)":"#b07a7a0a", border:`1px solid ${formOk?"#7aab8a30":formDebit===0?C.border:"#b07a7a30"}`, borderRadius:10, padding:"10px 14px", marginTop:4 }}>
                                     <span style={{ fontSize:13, fontWeight:600, color:formOk?"#7aab8a":formDebit===0?C.textDim:"#b07a7a" }}>
-                                        {formOk ? "✓ Notă echilibrată" : formDebit===0 ? "Introdu sumele pentru a verifica echilibrul" : `⚠ Diferență: ${fmt(Math.abs(formDebit-formCredit))} RON`}
+                                        {formOk ? "Nota este echilibrată" : formDebit===0 ? "Introdu sumele pentru a verifica echilibrul" : `Diferență: ${fmt(Math.abs(formDebit-formCredit))} RON`}
                                     </span>
                                     <div style={{ display:"flex", gap:16 }}>
                                         <span style={{ fontSize:12, color:"#7b9cba", fontWeight:600 }}>D: RON {fmt(formDebit)}</span>
@@ -308,7 +473,7 @@ export default function JurnalContabil() {
                                     </div>
                                 </div>
                             </div>
-                            {err && <p style={{ fontSize:13, color:"#b07a7a", margin:0, padding:"8px 12px", background:"#b07a7a18", borderRadius:8, border:"1px solid #b07a7a30" }}>⚠ {err}</p>}
+                            {err && <p style={{ fontSize:13, color:"#b07a7a", margin:0, padding:"8px 12px", background:"#b07a7a18", borderRadius:8, border:"1px solid #b07a7a30" }}>{err}</p>}
                         </div>
                         <div style={{ display:"flex", justifyContent:"flex-end", gap:10, padding:"16px 24px", borderTop:`1px solid ${C.border}`, position:"sticky", bottom:0, background:C.card }}>
                             <button onClick={closeModal} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:9, padding:"9px 18px", color:C.textMid, fontSize:13, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>Anulează</button>
@@ -375,9 +540,9 @@ export default function JurnalContabil() {
                                         return (
                                             <tr key={i} style={{ borderBottom:i<selected.lines.length-1?`1px solid ${C.border}`:"none" }}>
                                                 <td style={{ padding:"12px 16px" }}>
-                                                        <span style={{ fontSize:11, fontWeight:600, color, background:`${color}15`, border:`1px solid ${color}25`, borderRadius:5, padding:"3px 8px" }}>
-                                                            {isDebit?"Debit":"Credit"}
-                                                        </span>
+                                                    <span style={{ fontSize:11, fontWeight:600, color, background:`${color}15`, border:`1px solid ${color}25`, borderRadius:5, padding:"3px 8px" }}>
+                                                        {isDebit?"Debit":"Credit"}
+                                                    </span>
                                                 </td>
                                                 <td style={{ padding:"12px 16px" }}>
                                                     <span style={{ fontSize:13, fontFamily:"monospace", fontWeight:700, color }}>{line.accountCode}</span>
@@ -397,7 +562,7 @@ export default function JurnalContabil() {
                             </div>
                             <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", background:isBalanced?(C.isDark?"#7aab8a10":"#f0faf4"):(C.isDark?"#b07a7a10":"#fff0f0"), border:`1px solid ${isBalanced?"#7aab8a30":"#b07a7a30"}`, borderRadius:10, padding:"12px 16px" }}>
                                 <span style={{ fontSize:13, color:isBalanced?"#7aab8a":"#b07a7a", fontWeight:600 }}>
-                                    {isBalanced?"✓ Înregistrare echilibrată — Debit = Credit":"⚠ Dezechilibru detectat"}
+                                    {isBalanced?"Înregistrare echilibrată — Debit = Credit":"Dezechilibru detectat"}
                                 </span>
                                 <div style={{ display:"flex", gap:20 }}>
                                     <div style={{ textAlign:"right" }}>
@@ -417,9 +582,10 @@ export default function JurnalContabil() {
 
             <style>{`
                 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap');
-                @keyframes fadeUp  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-                @keyframes fadeIn  { from{opacity:0} to{opacity:1} }
-                @keyframes spin    { to{transform:rotate(360deg)} }
+                @keyframes fadeUp    { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+                @keyframes fadeIn    { from{opacity:0} to{opacity:1} }
+                @keyframes spin      { to{transform:rotate(360deg)} }
+                @keyframes dotPulse  { 0%,80%,100%{opacity:0.2;transform:scale(0.8)} 40%{opacity:1;transform:scale(1)} }
                 input::placeholder { color:${C.textDim}; }
                 input[type="date"]::-webkit-calendar-picker-indicator { filter:${C.isDark?"invert(1)":"none"}; opacity:0.5; }
                 .je-row:hover { background:${C.isDark?"rgba(255,255,255,0.025)":"rgba(0,0,0,0.025)"}!important; }
@@ -429,14 +595,13 @@ export default function JurnalContabil() {
 }
 
 /* ══════════════════════════════════════════════════════
-   CLOSE PANEL — model SAGA
-   Validare / Devalidare inchidere luna
+   CLOSE PANEL
 ══════════════════════════════════════════════════════ */
 function ClosePanel({ C, onDone }) {
     const [year, setYear]       = useState(new Date().getFullYear());
     const [month, setMonth]     = useState(new Date().getMonth() + 1);
     const [status, setStatus]   = useState(null);
-    const [result, setResult]   = useState(null);   // nota generata
+    const [result, setResult]   = useState(null);
     const [loading, setLoading] = useState(false);
     const [err, setErr]         = useState("");
 
@@ -466,7 +631,7 @@ function ClosePanel({ C, onDone }) {
                 setErr(e?.message || "Eroare la generarea închiderii.");
                 setLoading(false); return;
             }
-            setResult(await res.json());  // obiect singular, nu lista
+            setResult(await res.json());
             onDone();
             checkStatus();
         } catch { setErr("Eroare server."); }
@@ -492,14 +657,10 @@ function ClosePanel({ C, onDone }) {
 
     return (
         <div style={{ maxWidth:720 }}>
-
-            {/* Card principal */}
             <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14, padding:"22px 24px", marginBottom:16 }}>
                 <p style={{ fontSize:11, color:C.textDim, textTransform:"uppercase", letterSpacing:"0.7px", fontWeight:600, margin:"0 0 18px" }}>
                     Validare / Devalidare închidere lună
                 </p>
-
-                {/* Selectoare an + luna + status */}
                 <div style={{ display:"flex", alignItems:"flex-end", gap:12, marginBottom:18, flexWrap:"wrap" }}>
                     <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                         <label style={{ fontSize:11, color:C.textMid, textTransform:"uppercase", letterSpacing:"0.5px", fontWeight:500 }}>An</label>
@@ -523,56 +684,35 @@ function ClosePanel({ C, onDone }) {
                             border: `1px solid ${status.closed ? "#7aab8a40" : "#b09a6a40"}`,
                             color: status.closed ? "#7aab8a" : "#b09a6a" }}>
                             {status.closed
-                                ? `✓ Luna ${periodLabel} este închisă`
-                                : `⚠ Luna ${periodLabel} nu este închisă`}
+                                ? `Luna ${periodLabel} este închisă`
+                                : `Luna ${periodLabel} nu este închisă`}
                         </div>
                     )}
                 </div>
 
-                {/* Info box */}
-                <div style={{ background:C.isDark?"rgba(155,122,176,0.06)":"rgba(155,122,176,0.04)", border:"1px solid #9b7ab025", borderRadius:10, padding:"14px 16px", marginBottom:18 }}>
-                    <p style={{ fontSize:11, color:"#9b7ab0", textTransform:"uppercase", letterSpacing:"0.6px", fontWeight:700, margin:"0 0 10px" }}>
-                        Structura notei de închidere (model SAGA)
-                    </p>
-                    <div style={{ display:"grid", gridTemplateColumns:"auto 1fr", gap:"4px 12px", fontSize:12, lineHeight:1.8 }}>
-                        <span style={{ fontFamily:"monospace", fontWeight:700, color:"#7b9cba" }}>DEBIT</span>
-                        <span style={{ color:C.textMid }}>Cont <strong style={{color:C.text}}>121</strong> — total cheltuieli (6xx)</span>
-                        <span style={{ fontFamily:"monospace", fontWeight:700, color:"#7aab8a" }}>CREDIT</span>
-                        <span style={{ color:C.textMid }}>Fiecare cont <strong style={{color:C.text}}>6xx</strong> în parte</span>
-                        <span style={{ fontFamily:"monospace", fontWeight:700, color:"#7b9cba" }}>DEBIT</span>
-                        <span style={{ color:C.textMid }}>Fiecare cont <strong style={{color:C.text}}>7xx</strong> în parte</span>
-                        <span style={{ fontFamily:"monospace", fontWeight:700, color:"#7aab8a" }}>CREDIT</span>
-                        <span style={{ color:C.textMid }}>Cont <strong style={{color:C.text}}>121</strong> — total venituri (7xx)</span>
-                    </div>
-                    <p style={{ fontSize:11, color:C.textDim, margin:"10px 0 0" }}>
-                        Referință generată: <span style={{ fontFamily:"monospace", color:"#9b7ab0", fontWeight:700 }}>CLOSE-{year}-{mm(month)}</span>.
-                        Devalidarea șterge nota din DB — dispare imediat din toate rapoartele.
-                    </p>
-                </div>
 
-                {/* Butoane Validez / Devalidez */}
-                <div style={{ display:"flex", gap:10, alignItems:"center", flexWrap:"wrap" }}>
+
+                <div style={{ display:"flex", gap:15, alignItems:"center", flexWrap:"wrap" }}>
                     {!status?.closed ? (
                         <button onClick={doClose} disabled={loading}
                                 style={{ background:"#9b7ab0", border:"none", borderRadius:9, padding:"10px 28px", color:"#fff", fontSize:13, fontWeight:600, cursor:loading?"wait":"pointer", fontFamily:"'Outfit',sans-serif", opacity:loading?0.7:1, transition:"opacity 0.15s" }}>
-                            {loading ? "Se validează..." : `✓ Validez închiderea ${periodLabel}`}
+                            {loading ? "Se validează..." : `Validează închiderea ${periodLabel}`}
                         </button>
                     ) : (
                         <button onClick={doCancel} disabled={loading}
                                 style={{ background:"#b07a7a15", border:"1px solid #b07a7a40", borderRadius:9, padding:"10px 28px", color:"#b07a7a", fontSize:13, fontWeight:600, cursor:loading?"wait":"pointer", fontFamily:"'Outfit',sans-serif", opacity:loading?0.7:1 }}>
-                            {loading ? "Se devalidează..." : `✗ Devalidez închiderea ${periodLabel}`}
+                            {loading ? "Se devalidează..." : `Devalidează închiderea ${periodLabel}`}
                         </button>
                     )}
                 </div>
 
                 {err && (
                     <p style={{ fontSize:13, color:"#b07a7a", marginTop:14, padding:"8px 12px", background:"#b07a7a18", borderRadius:8, border:"1px solid #b07a7a30" }}>
-                        ⚠ {err}
+                        {err}
                     </p>
                 )}
             </div>
 
-            {/* Preview nota generata */}
             {result && (
                 <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                     <p style={{ fontSize:11, color:C.textDim, textTransform:"uppercase", letterSpacing:"0.6px", fontWeight:600, margin:0 }}>
@@ -602,9 +742,9 @@ function ClosePanel({ C, onDone }) {
                                 return (
                                     <tr key={j} style={{ borderBottom: j < result.lines.length-1 ? `1px solid ${C.border}` : "none" }}>
                                         <td style={{ padding:"9px 16px" }}>
-                                                <span style={{ fontSize:11, fontWeight:600, color, background:`${color}15`, border:`1px solid ${color}25`, borderRadius:5, padding:"2px 7px" }}>
-                                                    {isDebit?"Debit":"Credit"}
-                                                </span>
+                                            <span style={{ fontSize:11, fontWeight:600, color, background:`${color}15`, border:`1px solid ${color}25`, borderRadius:5, padding:"2px 7px" }}>
+                                                {isDebit?"Debit":"Credit"}
+                                            </span>
                                         </td>
                                         <td style={{ padding:"9px 16px", fontFamily:"monospace", fontSize:12, fontWeight:700, color }}>{line.accountCode}</td>
                                         <td style={{ padding:"9px 16px", fontSize:12, color:C.text }}>{line.accountName}</td>
@@ -644,7 +784,7 @@ function EntryRow({ entry, i, C, onClick }) {
                 </div>
             </td>
             <td style={{ padding:"13px 20px" }}><StatusBadge status={entry.status} C={C}/></td>
-            <td style={{ padding:"13px 20px", textAlign:"right" }}><span style={{ fontSize:11, color:C.textDim }}>Detalii ›</span></td>
+            <td style={{ padding:"13px 20px", textAlign:"right" }}><span style={{ fontSize:11, color:C.textDim }}>Detalii</span></td>
         </tr>
     );
 }
@@ -672,7 +812,9 @@ function InfoBlock({ label, val, C }) {
 function EmptyState({ C, onAdd }) {
     return (
         <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:320, background:C.card, border:`1px solid ${C.border}`, borderRadius:16, gap:14 }}>
-            <div style={{ width:52, height:52, borderRadius:16, background:"#a78bfa18", border:"1px solid #a78bfa25", display:"flex", alignItems:"center", justifyContent:"center", fontSize:24 }}>📒</div>
+            <div style={{ width:52, height:52, borderRadius:16, background:"#a78bfa18", border:"1px solid #a78bfa25", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                <svg width="22" height="22" viewBox="0 0 20 20" fill="none"><rect x="3" y="2" width="14" height="16" rx="2.5" stroke="#a78bfa" strokeWidth="1.4"/><path d="M7 6h6M7 9h6M7 12h4" stroke="#a78bfa" strokeWidth="1.4" strokeLinecap="round"/></svg>
+            </div>
             <div style={{ textAlign:"center" }}>
                 <p style={{ fontSize:15, fontWeight:600, color:C.text, margin:0 }}>Nicio notă contabilă</p>
                 <p style={{ fontSize:13, color:C.textDim, marginTop:6, maxWidth:340 }}>Notele se generează automat din facturi, cheltuieli și operațiuni bancare. Poți adăuga și manual note diverse.</p>

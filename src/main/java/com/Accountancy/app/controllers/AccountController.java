@@ -7,6 +7,7 @@ import com.Accountancy.app.services.AccountService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -60,6 +61,7 @@ public class AccountController {
 
     // POST /api/accounts
     @PostMapping
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<AccountResponse> createAccount(@RequestBody AccountRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(accountService.createAccount(request));
@@ -67,6 +69,7 @@ public class AccountController {
 
     // PUT /api/accounts/{id}
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<AccountResponse> updateAccount(@PathVariable Integer id,
                                                          @RequestBody AccountRequest request) {
         return ResponseEntity.ok(accountService.updateAccount(id, request));
@@ -74,6 +77,7 @@ public class AccountController {
 
     // DELETE /api/accounts/{id}
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deactivateAccount(@PathVariable Integer id) {
         accountService.deactivateAccount(id);
         return ResponseEntity.noContent().build();

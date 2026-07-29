@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,16 +35,19 @@ public class SupplierController {
     }
 
     @PostMapping("/api/suppliers")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierResponse> createSupplier(@RequestBody SupplierRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(supplierService.createSupplier(request));
     }
 
     @PutMapping("/api/suppliers/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierResponse> updateSupplier(@PathVariable Integer id, @RequestBody SupplierRequest request) {
         return ResponseEntity.ok(supplierService.updateSupplier(id, request));
     }
 
     @DeleteMapping("/api/suppliers/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deactivateSupplier(@PathVariable Integer id) {
         supplierService.deactivateSupplier(id);
         return ResponseEntity.noContent().build();
@@ -71,30 +75,35 @@ public class SupplierController {
 
     @Operation(summary = "Create supplier invoice with status PENDING — does not post journal entry yet")
     @PostMapping("/api/supplier-invoices")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierInvoiceResponse> createSupplierInvoice(@RequestBody SupplierInvoiceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(supplierService.createSupplierInvoice(request));
     }
 
     @Operation(summary = "Register invoice: PENDING → REGISTERED. Posts journal entry 6xx+4426=401. Invoice now appears in reports.")
     @PostMapping("/api/supplier-invoices/{id}/register")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierInvoiceResponse> registerSupplierInvoice(@PathVariable Integer id) {
         return ResponseEntity.ok(supplierService.registerSupplierInvoice(id));
     }
 
     @Operation(summary = "Pay invoice: REGISTERED / OVERDUE → PAID. Posts journal entry 401=5121.")
     @PostMapping("/api/supplier-invoices/{id}/pay")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierInvoiceResponse> paySupplierInvoice(@PathVariable Integer id) {
         return ResponseEntity.ok(supplierService.paySupplierInvoice(id));
     }
 
     @Operation(summary = "Void invoice: PENDING / REGISTERED / OVERDUE → VOID. Cannot void paid invoices.")
     @PostMapping("/api/supplier-invoices/{id}/void")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierInvoiceResponse> voidSupplierInvoice(@PathVariable Integer id) {
         return ResponseEntity.ok(supplierService.voidSupplierInvoice(id));
     }
 
     @Operation(summary = "Check and mark overdue: sets OVERDUE on REGISTERED invoices past due date.")
     @PostMapping("/api/supplier-invoices/check-overdue")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Map<String, Integer>> checkOverdue() {
         int updated = supplierService.checkAndMarkOverdue();
         return ResponseEntity.ok(Map.of("updatedCount", updated));
@@ -102,12 +111,14 @@ public class SupplierController {
 
     @Operation(summary = "Delete supplier invoice: removes bank operation (if PAID), journal entries, and invoice")
     @DeleteMapping("/api/supplier-invoices/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deleteSupplierInvoice(@PathVariable Integer id) {
         supplierService.deleteSupplierInvoice(id);
         return ResponseEntity.noContent().build();
     }
     @Operation(summary = "Update supplier invoice: only PENDING invoices can be edited")
     @PutMapping("/api/supplier-invoices/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<SupplierInvoiceResponse> updateSupplierInvoice(@PathVariable Integer id,
                                                                          @RequestBody SupplierInvoiceRequest request) {
         return ResponseEntity.ok(supplierService.updateSupplierInvoice(id, request));

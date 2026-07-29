@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 
 const API_BASE = "http://localhost:8080";
 
-// Fixed semantic colors (same in both themes)
 const SEM = {
     revenue: "#7b9cba",
     expenses:"#b07a7a",
@@ -12,18 +11,21 @@ const SEM = {
     warning: "#b09a6a",
 };
 
+// ── Status names corecte ──────────────────────────────────────────────────────
 const STATUS_META = {
-    PAID:    { label:"Achitată",  color:"#7aab8a" },
-    SENT:    { label:"Trimisă",   color:"#7b9cba" },
-    OVERDUE: { label:"Restantă",  color:"#b07a7a" },
-    DRAFT:   { label:"Ciornă",    color:"#6b7280" },
+    PAID:      { label:"Achitată",   labelPlural:"Achitate",   color:"#7aab8a" },
+    VALIDATED: { label:"Validată",   labelPlural:"Validate",   color:"#7b9cba" },
+    OVERDUE:   { label:"Restantă",   labelPlural:"Restante",   color:"#b07a7a" },
+    ISSUED:    { label:"Emisă",      labelPlural:"Emise",      color:"#b09a6a" },
+    DRAFT:     { label:"Ciornă",     labelPlural:"Ciorne",     color:"#6b7280" },
+    VOID:      { label:"Anulată",    labelPlural:"Anulate",    color:"#9ca3af" },
 };
 
 const PERIODS = [
-    { key:"this_month",   label:"Luna curentă"  },
-    { key:"last_month",   label:"Luna trecută"  },
-    { key:"this_quarter", label:"Trimestrul curent" },
-    { key:"this_year",    label:"Anul curent"   },
+    { key:"this_month",   label:"Luna curentă"         },
+    { key:"last_month",   label:"Luna trecută"          },
+    { key:"this_quarter", label:"Trimestrul curent"     },
+    { key:"this_year",    label:"Anul curent"           },
     { key:"custom",       label:"Interval personalizat" },
 ];
 
@@ -130,9 +132,9 @@ function MiniCalendar({ onRangeSelect, initialFrom, initialTo, C }) {
             </div>
             {start && (
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:12, paddingTop:10, borderTop:`1px solid ${C.border}` }}>
-          <span style={{ color:C.textMid, fontSize:11 }}>
-            {start&&!end?`De la ${fmtDisplay(start)} — alege sfârșit`:end?`${fmtDisplay(start)} → ${fmtDisplay(end)}`:""}
-          </span>
+                    <span style={{ color:C.textMid, fontSize:11 }}>
+                        {start&&!end?`De la ${fmtDisplay(start)} — alege sfârșit`:end?`${fmtDisplay(start)} → ${fmtDisplay(end)}`:""}
+                    </span>
                     {start&&end&&<button onClick={()=>onRangeSelect&&onRangeSelect(start,end)} style={{ background:C.accent, border:"none", borderRadius:6, padding:"5px 12px", color:C.isDark?"#0f1117":"#fff", fontSize:11, fontWeight:600, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>Aplică →</button>}
                 </div>
             )}
@@ -140,18 +142,18 @@ function MiniCalendar({ onRangeSelect, initialFrom, initialTo, C }) {
     );
 }
 
-export default function Dashboard() {
+export default function Dashboard({ setPage }) {
     const T = useTheme();
     const C = T ? { ...SEM, text:T.text, textMid:T.textMid, textDim:T.textDim, bg:T.bg, card:T.card, border:T.border, border2:T.border2, accent:T.accent, isDark:T.isDark } : { ...SEM, text:"#d4d8e0", textMid:"#6b7280", textDim:"#374151", bg:"#0f1117", card:"#141820", border:"#1e2330", border2:"#252d3a", accent:"#a78bfa", isDark:true };
 
-    const [period, setPeriod]           = useState("this_month");
-    const [customRange, setCustomRange] = useState(null);
-    const [showCal, setShowCal]         = useState(false);
-    const [data, setData]               = useState(null);
+    const [period, setPeriod]             = useState("this_month");
+    const [customRange, setCustomRange]   = useState(null);
+    const [showCal, setShowCal]           = useState(false);
+    const [data, setData]                 = useState(null);
     const [invoiceStats, setInvoiceStats] = useState(null);
-    const [loading, setLoading]         = useState(true);
-    const [error, setError]             = useState("");
-    const [tick, setTick]               = useState(0);
+    const [loading, setLoading]           = useState(true);
+    const [error, setError]               = useState("");
+    const [tick, setTick]                 = useState(0);
     const calRef = useRef(null);
     const user = JSON.parse(localStorage.getItem("user")||"{}");
 
@@ -169,16 +171,49 @@ export default function Dashboard() {
 
         const plFetch   = fetch(`${API_BASE}/api/reports/profit-and-loss?from=${fromStr}&to=${toStr}`, {headers}).then(r=>r.json());
         const dashFetch = fetch(`${API_BASE}/api/reports/dashboard`, {headers}).then(r=>r.json());
-        const statusFetches = ["PAID","SENT","OVERDUE","DRAFT"].map(status =>
+
+        // Fetch toate statusurile relevante
+        const statusFetches = ["PAID", "VALIDATED", "OVERDUE", "ISSUED"].map(status =>
             fetch(`${API_BASE}/api/invoices/status/${status}`, {headers})
-                .then(r=>r.json())
-                .then(invoices=>({ status, count:invoices.length, total:invoices.reduce((s,inv)=>s+(inv.total||0),0) }))
-                .catch(()=>({ status, count:0, total:0 }))
+                .then(r => r.json())
+                .then(invoices => {
+                    const filtered = invoices.filter(inv => {
+                        const d = new Date(inv.issueDate);
+                        return d >= from && d <= to;
+                    });
+                    return {
+                        status,
+                        count: filtered.length,
+                        total: filtered.reduce((s, inv) => s + (inv.total || 0), 0)
+                    };
+                })
+                .catch(() => ({ status, count: 0, total: 0 }))
         );
 
         Promise.all([plFetch, dashFetch, Promise.all(statusFetches)])
             .then(([pl, dash, stats]) => {
-                setData({ totalRevenue:pl.totalRevenue, totalExpenses:pl.totalExpenses, netProfit:pl.netProfit, outstandingInvoices:dash.outstandingInvoices, totalPaidInvoices:dash.totalPaidInvoices, pendingExpensesCount:dash.pendingExpensesCount });
+                // Calculăm valorile corecte din stats
+                const sentStat    = stats.find(s => s.status === "VALIDATED");
+                const issuedStat  = stats.find(s => s.status === "ISSUED");
+                const overdueStat = stats.find(s=>s.status==="OVERDUE");
+                const paidStat    = stats.find(s=>s.status==="PAID");
+
+                // Neîncasat = SENT + OVERDUE (facturi trimise dar neachitate)
+                const neincasat = (sentStat?.total||0) + (overdueStat?.total||0);
+                const neincasatCount = (sentStat?.count||0) + (overdueStat?.count||0);
+
+                setData({
+                    totalRevenue:       pl.totalRevenue,
+                    totalExpenses:      pl.totalExpenses,
+                    netProfit:          pl.netProfit,
+                    outstandingInvoices: neincasat,
+                    neincasatCount,
+                    totalPaidInvoices:  paidStat?.total||0,
+                    paidCount:          paidStat?.count||0,
+                    pendingExpensesCount: dash.pendingExpensesCount,
+                    overdueTotal:       overdueStat?.total||0,
+                    overdueCount:       overdueStat?.count||0,
+                });
                 setInvoiceStats(stats);
                 setTick(t=>t+1);
                 setLoading(false);
@@ -188,36 +223,35 @@ export default function Dashboard() {
 
     if (error) return <ErrorBox message={error} C={C} />;
 
-    const fmt = n => new Intl.NumberFormat("en-US",{minimumFractionDigits:0,maximumFractionDigits:0}).format(n??0);
-    const periodInfo = getPeriodDates(period, customRange);
-    const isProfit   = (data?.netProfit??0) >= 0;
-    const margin     = data?.totalRevenue ? Math.round((data.netProfit/data.totalRevenue)*100) : 0;
-    const hour       = new Date().getHours();
-    const greeting   = hour<12?"Bună dimineața":hour<18?"Bună ziua":"Bună seara";
+    const periodInfo    = getPeriodDates(period, customRange);
+    const isProfit      = (data?.netProfit??0) >= 0;
     const totalInvValue = invoiceStats?.reduce((s,i)=>s+i.total,0)||1;
+    const hour          = new Date().getHours();
+    const greeting      = hour<12?"Bună dimineața":hour<18?"Bună ziua":"Bună seara";
 
     return (
         <div style={{ padding:"28px 36px", fontFamily:"'Outfit',sans-serif", color:C.text, display:"flex", flexDirection:"column", gap:16, background:C.bg, minHeight:"100vh" }}>
 
-            {/* HERO */}
+            {/* ── HERO ── */}
             <div style={{ position:"relative", borderRadius:20, overflow:"visible", height:210, display:"flex", alignItems:"flex-end" }}>
                 <div style={{ position:"absolute", inset:0, background:C.card, borderRadius:20, overflow:"hidden" }} />
-                <img src="/SunRise_Cover.png" alt="" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 44%", opacity: C.isDark ? 0.22 : 0.60, borderRadius:20 }} />
-                <div style={{ position:"absolute", inset:0, background: C.isDark ? "linear-gradient(90deg,rgba(15,17,23,0.98) 0%,rgba(15,17,23,0.75) 55%,rgba(15,17,23,0.15) 100%)" : "linear-gradient(90deg,rgba(240,242,248,0.98) 0%,rgba(240,242,248,0.8) 55%,rgba(240,242,248,0.1) 100%)", borderRadius:20 }} />
+                <img src="/SunRise_Cover.png" alt="" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", objectPosition:"center 44%", opacity:C.isDark?0.22:0.60, borderRadius:20 }} />
+                <div style={{ position:"absolute", inset:0, background:C.isDark?"linear-gradient(90deg,rgba(15,17,23,0.98) 0%,rgba(15,17,23,0.75) 55%,rgba(15,17,23,0.15) 100%)":"linear-gradient(90deg,rgba(240,242,248,0.98) 0%,rgba(240,242,248,0.8) 55%,rgba(240,242,248,0.1) 100%)", borderRadius:20 }} />
                 <div style={{ position:"relative", zIndex:2, padding:"0 36px 28px", flex:1 }}>
                     <p style={{ fontSize:12, color:C.textDim, marginBottom:8, textTransform:"uppercase", letterSpacing:"0.8px" }}>{greeting}, {user.name?.split(" ")[0]||"there"}</p>
                     {loading ? <MiniSpinner C={C} /> : (
                         <h1 style={{ fontSize:28, fontWeight:700, color:C.text, lineHeight:1.25, letterSpacing:"-0.5px", margin:"0 0 8px" }}>
-                            {"Profitul tău"}<br />
-                            <span style={{ color:isProfit?SEM.profit:SEM.expenses }}>RON <CountUp value={data.netProfit} duration={900} delay={100} trigger={tick} /> net</span>
+                            {"Profit"}<br/>
+                            <span style={{ color:isProfit?SEM.profit:SEM.expenses }}>RON <CountUp value={data.netProfit} duration={900} delay={100} trigger={tick}/> net</span>
                         </h1>
                     )}
                     <p style={{ fontSize:12, color:C.textMid }}>{periodInfo.label}</p>
                 </div>
+                {/* Period selector */}
                 <div style={{ position:"relative", zIndex:10, padding:"20px 28px 20px 0", display:"flex", flexDirection:"column", gap:0, alignSelf:"stretch", justifyContent:"center" }}>
                     {PERIODS.map(p => (
                         <button key={p.key} onClick={() => { setPeriod(p.key); if(p.key==="custom") setShowCal(true); else setShowCal(false); }}
-                                style={{ border:"none", borderRadius:0, cursor:"pointer", fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:500, padding:"7px 16px 7px 14px", transition:"all 0.15s", textAlign:"left", width:"100%", color:period===p.key?C.text:C.textMid, background:period===p.key?`${C.accent}18`:"transparent", borderLeft:`2px solid ${period===p.key?C.accent:"transparent"}` }}>
+                                style={{ border:"none", borderRadius:0, cursor:"pointer", fontFamily:"'Outfit',sans-serif", fontSize:12, fontWeight:500, padding:"7px 16px 7px 14px", transition:"all 0.15s", textAlign:"left", width:"100%", color:period===p.key?C.text:C.textMid, background:"transparent",borderRight:`2px solid ${period===p.key?C.text+"60":"transparent"}` }}>
                             {p.label}
                         </button>
                     ))}
@@ -230,68 +264,87 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            {/* KPI ROW */}
+            {/* ── KPI ROW ── */}
             <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
-                <KpiCard label="Venituri totale"   target={data?.totalRevenue??0}        color={SEM.revenue}  delay={0}   trigger={tick} loading={loading} C={C} />
-                <KpiCard label="Cheltuieli totale" target={data?.totalExpenses??0}       color={SEM.expenses} delay={60}  trigger={tick} loading={loading} C={C} />
-                <KpiCard label="Profit net"        target={data?.netProfit??0}           color={isProfit?SEM.profit:SEM.expenses} delay={120} trigger={tick} loading={loading} C={C} />
-                <KpiCard label="Neîncasat"         target={data?.outstandingInvoices??0} color={SEM.warning}  delay={180} trigger={tick} loading={loading} C={C} />
+                <KpiCard label="Venituri totale"   target={data?.totalRevenue??0}          color={SEM.revenue}  delay={0}   trigger={tick} loading={loading} C={C}/>
+                <KpiCard label="Cheltuieli totale" target={data?.totalExpenses??0}         color={SEM.expenses} delay={60}  trigger={tick} loading={loading} C={C}/>
+                <KpiCard label="Profit net"        target={data?.netProfit??0}             color={isProfit?SEM.profit:SEM.expenses} delay={120} trigger={tick} loading={loading} C={C}/>
+                <KpiCard label="Neîncasat"         target={data?.outstandingInvoices??0}   color={SEM.warning}  delay={180} trigger={tick} loading={loading} C={C}/>
             </div>
 
-            {/* BOTTOM ROW */}
+            {/* ── BOTTOM ROW ── */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1.4fr 1fr", gap:12 }}>
 
-                {/* Pending */}
+                {/* ── Card facturi neachitate — înlocuiește cardul cu aprobări ── */}
                 <div style={{ position:"relative", borderRadius:16, overflow:"hidden", minHeight:250, display:"flex", flexDirection:"column", justifyContent:"flex-end" }}>
-                    <div style={{ position:"absolute", inset:0, background:C.card }} />
-                    <img src="/Mountain_Cover.png" alt="" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", opacity:C.isDark?0.25:0.70 }} />
-                    <div style={{ position:"absolute", inset:0, background: C.isDark ? "linear-gradient(0deg,rgba(15,17,23,0.98) 0%,rgba(15,17,23,0.6) 55%,rgba(15,17,23,0.05) 100%)" : "linear-gradient(0deg,rgba(240,242,248,0.98) 0%,rgba(240,242,248,0.7) 55%,rgba(240,242,248,0.05) 100%)" }} />
+                    <div style={{ position:"absolute", inset:0, background:C.card }}/>
+                    <img src="/Mountain_Cover.png" alt="" style={{ position:"absolute", inset:0, width:"100%", height:"100%", objectFit:"cover", opacity:C.isDark?0.25:0.70 }}/>
+                    <div style={{ position:"absolute", inset:0, background:C.isDark?"linear-gradient(0deg,rgba(15,17,23,0.98) 0%,rgba(15,17,23,0.6) 55%,rgba(15,17,23,0.05) 100%)":"linear-gradient(0deg,rgba(240,242,248,0.98) 0%,rgba(240,242,248,0.7) 55%,rgba(240,242,248,0.05) 100%)"}}/>
                     <div style={{ position:"relative", zIndex:2, padding:22, display:"flex", flexDirection:"column", gap:5 }}>
-                        <span style={{ fontSize:10, color:C.textDim, textTransform:"uppercase", letterSpacing:"1px" }}>Aprobări în așteptare</span>
-                        <span style={{ fontSize:48, fontWeight:700, color:C.text, lineHeight:1, letterSpacing:"-2px" }}>
-              {loading?"—":<CountUp value={data?.pendingExpensesCount??0} duration={600} delay={200} trigger={tick} />}
-            </span>
-                        <span style={{ fontSize:12, color:C.textMid }}>cheltuieli în așteptare</span>
-                        <button style={{ marginTop:14, background:`${C.accent}15`, border:`1px solid ${C.accent}30`, borderRadius:8, padding:"7px 14px", color:C.accent, fontSize:12, fontWeight:500, fontFamily:"'Outfit',sans-serif", cursor:"pointer", alignSelf:"flex-start" }}>Verifică acum →</button>
+                        <span style={{ fontSize:10, color:C.textDim, textTransform:"uppercase", letterSpacing:"1px" }}>Facturi validate în așteptare</span>
+                        <span style={{ fontSize:42, fontWeight:700, color:C.text, lineHeight:1, letterSpacing:"-2px" }}>
+        {loading?"—":<CountUp value={data?.neincasatCount??0} duration={600} delay={200} trigger={tick}/>}
+    </span>
+                        <span style={{ fontSize:12, color:C.textMid }}>
+        {loading?"—":<><CountUp value={data?.outstandingInvoices??0}   duration={700} delay={250} trigger={tick}/> RON de încasat</>}
+    </span>
+
+                        <button
+                            onClick={() => setPage && setPage("bank")}
+                            style={{ marginTop:14, background:`${SEM.revenue}15`, border:`1px solid ${SEM.revenue}30`, borderRadius:8, padding:"7px 14px", color:SEM.revenue, fontSize:12, fontWeight:500, fontFamily:"'Outfit',sans-serif", cursor:"pointer", alignSelf:"flex-start" }}>
+                            Bancă
+                        </button>
                     </div>
                 </div>
 
-                {/* Invoice Status */}
+                {/* ── Invoice Status ── */}
                 <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"20px 22px", display:"flex", flexDirection:"column", gap:14 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                         <p style={{ fontSize:10, color:C.textDim, textTransform:"uppercase", letterSpacing:"0.8px", fontWeight:600, margin:0 }}>Status Facturi</p>
-                        <span style={{ fontSize:11, color:C.textDim }}>{invoiceStats?.reduce((s,i)=>s+i.count,0)??0} total</span>
+                        <span style={{ fontSize:11, color:C.textDim }}>
+    {invoiceStats?.reduce((s,i)=>s+i.count,0)??0} {invoiceStats?.reduce((s,i)=>s+i.count,0)===1 ? "factură" : "facturi"}
+</span>
                     </div>
-                    <StackedBar stats={invoiceStats} total={totalInvValue} trigger={tick} C={C} />
+                    <StackedBar stats={invoiceStats} total={totalInvValue} trigger={tick} C={C}/>
                     <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                         {invoiceStats?.map((stat,i) => {
-                            const meta=STATUS_META[stat.status];
-                            const pct=totalInvValue>0?(stat.total/totalInvValue)*100:0;
-                            return <StatusRow key={stat.status} label={meta.label} count={stat.count} total={stat.total} color={meta.color} pct={pct} delay={300+i*100} trigger={tick} C={C} />;
-                        })}
+                            const meta = STATUS_META[stat.status] || { label:stat.status, color:"#6b7280" };
+                            const pct  = totalInvValue>0?(stat.total/totalInvValue)*100:0;
+                            return <StatusRow key={stat.status} label={meta.label} labelPlural={meta.labelPlural} count={stat.count} total={stat.total} color={meta.color} pct={pct} delay={300+i*100} trigger={tick} C={C}/>;                        })}
                     </div>
                 </div>
 
-                {/* Quick Stats */}
+                {/* ── Statistici rapide — valori cu sens ── */}
+                {/* ── Indicatori cheie ── */}
                 <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"20px 22px", display:"flex", flexDirection:"column", gap:14 }}>
-                    <p style={{ fontSize:10, color:C.textDim, textTransform:"uppercase", letterSpacing:"0.8px", fontWeight:600, margin:0 }}>Statistici rapide</p>
+                    <p style={{ fontSize:10, color:C.textDim, textTransform:"uppercase", letterSpacing:"0.8px", fontWeight:600, margin:0 }}>Indicatori cheie</p>
                     <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
-                        <StatItem label="Facturi achitate"    target={data?.totalPaidInvoices??0}      prefix="RON " delay={200} trigger={tick} loading={loading} C={C} />
-                        <StatItem label="Cheltuieli în așteptare" target={data?.pendingExpensesCount??0}   suffix=" intrări" delay={300} trigger={tick} loading={loading} C={C} />
-                        <StatItem label="Neîncasat"           target={data?.outstandingInvoices??0}    prefix="RON " delay={400} trigger={tick} loading={loading} C={C} />
-                        <StatItem label="Net perioadă"        target={data?.netProfit??0}              prefix="RON " delay={500} trigger={tick} loading={loading} C={C} />
+                        <StatItem label="Marjă profit"
+                                  target={data?.totalRevenue ? Math.round((data.netProfit/data.totalRevenue)*100) : 0}
+                                  suffix="%" delay={200} trigger={tick} loading={loading} C={C}
+                                  highlight={data?.totalRevenue ? Math.round((data.netProfit/data.totalRevenue)*100) < 0 : false}
+                                  highlightColor={SEM.expenses}/>
+                        <StatItem label="Rată cheltuieli"
+                                  target={data?.totalRevenue ? Math.round((data.totalExpenses/data.totalRevenue)*100) : 0}
+                                  suffix="%" delay={280} trigger={tick} loading={loading} C={C}/>
+                        <StatItem label="Facturi emise"
+                                  target={invoiceStats?.reduce((s,i)=>s+i.count,0)??0}
+                                  suffix=" total" delay={360} trigger={tick} loading={loading} C={C}/>
+                        <StatItem label="Grad încasare"
+                                  target={data?.totalRevenue ? Math.round(((data.totalRevenue - data.outstandingInvoices)/data.totalRevenue)*100) : 100}
+                                  suffix="%" delay={440} trigger={tick} loading={loading} C={C}/>
                     </div>
                 </div>
             </div>
 
-            {/* Analytics */}
-            <AnalyticsCard period={period} customRange={customRange} tick={tick} C={C} />
+            {/* ── Analytics ── */}
+            <AnalyticsCard period={period} customRange={customRange} tick={tick} C={C}/>
 
             <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-        @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes spin   { to{transform:rotate(360deg)} }
-      `}</style>
+                @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
+                @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+                @keyframes spin   { to{transform:rotate(360deg)} }
+            `}</style>
         </div>
     );
 }
@@ -308,29 +361,29 @@ function StackedBar({ stats, total, trigger, C }) {
     return (
         <div style={{ height:5, borderRadius:99, overflow:"hidden", display:"flex", background:C.border2 }}>
             {stats?.map(stat => {
-                const meta=STATUS_META[stat.status];
-                const pct=total>0?(stat.total/total)*100:0;
-                return <div key={stat.status} style={{ height:"100%", width:vis?`${pct}%`:"0%", background:meta.color, transition:"width 1s cubic-bezier(0.16,1,0.3,1)", opacity:0.8 }} />;
+                const meta = STATUS_META[stat.status] || { color:"#6b7280" };
+                const pct  = total>0?(stat.total/total)*100:0;
+                return <div key={stat.status} style={{ height:"100%", width:vis?`${pct}%`:"0%", background:meta.color, transition:"width 1s cubic-bezier(0.16,1,0.3,1)", opacity:0.8 }}/>;
             })}
         </div>
     );
 }
 
-function StatusRow({ label, count, total, color, pct, delay, trigger, C }) {
+function StatusRow({ label, labelPlural, count, total, color, pct, delay, trigger, C }) {
     const w = useBarWidth(pct, delay, trigger);
     const fmt = n => new Intl.NumberFormat("en-US",{minimumFractionDigits:0,maximumFractionDigits:0}).format(n??0);
     return (
         <div style={{ padding:"8px 0", borderBottom:`1px solid ${C.border}` }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:5 }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                    <div style={{ width:5, height:5, borderRadius:"50%", background:color, opacity:0.8 }} />
-                    <span style={{ fontSize:12, color:C.textMid }}>{label}</span>
+                    <div style={{ width:5, height:5, borderRadius:"50%", background:color, opacity:0.8 }}/>
+                    <span style={{ fontSize:12, color:C.textMid }}>{count === 1 ? label : (labelPlural || label)}</span>
                     <span style={{ fontSize:11, color:C.textDim, background:C.border2, borderRadius:4, padding:"1px 6px" }}>{count}</span>
                 </div>
                 <span style={{ fontSize:12, color:C.text, fontWeight:500 }}>RON {fmt(total)}</span>
             </div>
             <div style={{ height:2, background:C.border2, borderRadius:99, overflow:"hidden" }}>
-                <div style={{ height:"100%", width:`${w}%`, background:color, borderRadius:99, transition:"width 1s cubic-bezier(0.16,1,0.3,1)", opacity:0.7 }} />
+                <div style={{ height:"100%", width:`${w}%`, background:color, borderRadius:99, transition:"width 1s cubic-bezier(0.16,1,0.3,1)", opacity:0.7 }}/>
             </div>
         </div>
     );
@@ -342,7 +395,7 @@ function KpiCard({ label, target, color, delay, trigger, loading, C }) {
     const display = (target??0)<0?`-${fmt(count)}`:fmt(count);
     return (
         <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"18px 20px", display:"flex", flexDirection:"column" }}>
-            <div style={{ width:20, height:2, background:color, borderRadius:99, marginBottom:14, opacity:0.7 }} />
+            <div style={{ width:20, height:2, background:color, borderRadius:99, marginBottom:14, opacity:0.7 }}/>
             <div style={{ fontSize:20, fontWeight:700, color:loading?C.textDim:C.text, letterSpacing:"-0.5px", marginBottom:4, transition:"color 0.3s" }}>
                 {loading?"—":`RON ${display}`}
             </div>
@@ -351,20 +404,21 @@ function KpiCard({ label, target, color, delay, trigger, loading, C }) {
     );
 }
 
-function StatItem({ label, target, prefix="", suffix="", delay, trigger, loading, C }) {
+function StatItem({ label, target, prefix="", suffix="", delay, trigger, loading, C, highlight=false, highlightColor="" }) {
     const count = useCountUp(Math.abs(target??0), 700, delay, trigger);
     const fmt = n => new Intl.NumberFormat("en-US").format(n);
     const display = (target??0)<0?`-${fmt(count)}`:fmt(count);
+    const valueColor = highlight && !loading ? highlightColor : loading ? C.textDim : C.text;
     return (
-        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", background:C.bg, borderRadius:10, border:`1px solid ${C.border}` }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"10px 12px", background:C.bg, borderRadius:10, border:`1px solid ${highlight&&!loading?highlightColor+"40":C.border}` }}>
             <span style={{ fontSize:12, color:C.textMid, textTransform:"uppercase", letterSpacing:"0.5px" }}>{label}</span>
-            <span style={{ fontSize:13, fontWeight:600, color:loading?C.textDim:C.text }}>{loading?"—":`${prefix}${display}${suffix}`}</span>
+            <span style={{ fontSize:13, fontWeight:600, color:valueColor }}>{loading?"—":`${prefix}${display}${suffix}`}</span>
         </div>
     );
 }
 
 function AnalyticsCard({ period, customRange, tick, C }) {
-    const [chartData, setChartData] = useState([]);
+    const [chartData, setChartData]       = useState([]);
     const [chartLoading, setChartLoading] = useState(true);
 
     useEffect(() => {
@@ -383,7 +437,7 @@ function AnalyticsCard({ period, customRange, tick, C }) {
                 fetch(`${API_BASE}/api/reports/profit-and-loss?from=${fmtDate(p.from)}&to=${fmtDate(p.to)}`, {headers})
                     .then(r=>r.json())
                     .then(d=>({ name:p.label, Venituri:d.totalRevenue||0, Cheltuieli:d.totalExpenses||0 }))
-                    .catch(()=>({ name:p.label, Revenue:0, Expenses:0 }))
+                    .catch(()=>({ name:p.label, Venituri:0, Cheltuieli:0 }))
             )
         ).then(data=>{ setChartData(data); setChartLoading(false); });
     }, [tick]);
@@ -406,25 +460,25 @@ function AnalyticsCard({ period, customRange, tick, C }) {
                     <p style={{ fontSize:11, color:C.textDim, marginTop:3 }}>Venituri vs Cheltuieli pe lună</p>
                 </div>
                 <div style={{ display:"flex", gap:16, alignItems:"center" }}>
-          <span style={{ fontSize:11, color:C.textMid, display:"flex", alignItems:"center", gap:6 }}>
-            <span style={{ width:8, height:8, borderRadius:2, background:SEM.revenue, display:"inline-block" }} />Venituri
-          </span>
                     <span style={{ fontSize:11, color:C.textMid, display:"flex", alignItems:"center", gap:6 }}>
-            <span style={{ width:8, height:8, borderRadius:2, background:SEM.expenses, display:"inline-block" }} />Cheltuieli
-          </span>
+                        <span style={{ width:8, height:8, borderRadius:2, background:SEM.revenue, display:"inline-block" }}/>Venituri
+                    </span>
+                    <span style={{ fontSize:11, color:C.textMid, display:"flex", alignItems:"center", gap:6 }}>
+                        <span style={{ width:8, height:8, borderRadius:2, background:SEM.expenses, display:"inline-block" }}/>Cheltuieli
+                    </span>
                 </div>
             </div>
             {chartLoading ? (
-                <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center" }}><MiniSpinner C={C} /></div>
+                <div style={{ height:200, display:"flex", alignItems:"center", justifyContent:"center" }}><MiniSpinner C={C}/></div>
             ) : (
                 <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={chartData} barGap={4} barCategoryGap="30%">
-                        <CartesianGrid vertical={false} stroke={C.border} strokeDasharray="4 4" />
-                        <XAxis dataKey="name" tick={{ fill:C.textDim, fontSize:11 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill:C.textDim, fontSize:11 }} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill:`${C.accent}08` }} />
-                        <Bar dataKey="Venituri"   fill={SEM.revenue}  radius={[4,4,0,0]} maxBarSize={32} opacity={0.85} />
-                        <Bar dataKey="Cheltuieli" fill={SEM.expenses} radius={[4,4,0,0]} maxBarSize={32} opacity={0.85} />
+                        <CartesianGrid vertical={false} stroke={C.border} strokeDasharray="4 4"/>
+                        <XAxis dataKey="name" tick={{ fill:C.textDim, fontSize:11 }} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{ fill:C.textDim, fontSize:11 }} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
+                        <Tooltip content={<CustomTooltip/>} cursor={{ fill:`${C.accent}08` }}/>
+                        <Bar dataKey="Venituri"   fill={SEM.revenue}  radius={[4,4,0,0]} maxBarSize={32} opacity={0.85}/>
+                        <Bar dataKey="Cheltuieli" fill={SEM.expenses} radius={[4,4,0,0]} maxBarSize={32} opacity={0.85}/>
                     </BarChart>
                 </ResponsiveContainer>
             )}
@@ -433,13 +487,13 @@ function AnalyticsCard({ period, customRange, tick, C }) {
 }
 
 function MiniSpinner({ C }) {
-    return <div style={{ width:16, height:16, border:`2px solid ${C.border2}`, borderTopColor:C.accent, borderRadius:"50%", animation:"spin 0.8s linear infinite" }} />;
+    return <div style={{ width:16, height:16, border:`2px solid ${C.border2}`, borderTopColor:C.accent, borderRadius:"50%", animation:"spin 0.8s linear infinite" }}/>;
 }
 
 function ErrorBox({ message, C }) {
     return (
         <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"80vh" }}>
-            <div style={{ background: C.isDark?"#1a1218":"#fff0f0", border:`1px solid ${SEM.expenses}40`, borderRadius:12, padding:"18px 24px", color:SEM.expenses, fontSize:14 }}>⚠ {message}</div>
+            <div style={{ background:C.isDark?"#1a1218":"#fff0f0", border:`1px solid ${SEM.expenses}40`, borderRadius:12, padding:"18px 24px", color:SEM.expenses, fontSize:14 }}>⚠ {message}</div>
         </div>
     );
 }

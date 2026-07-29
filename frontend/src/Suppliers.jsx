@@ -11,8 +11,9 @@ function authHeaders()     { return { Authorization:`Bearer ${localStorage.getIt
 
 const EMPTY = { name:"", email:"", phone:"", address:"", taxId:"" };
 
-export default function Suppliers() {
+export default function Suppliers({ role }) {
     const T = useTheme();
+    const canEdit = role !== "VIEWER";
     const C = T ?? { text:"#d4d8e0", textMid:"#6b7280", textDim:"#374151", bg:"#0f1117", card:"#141820", border:"#1e2330", border2:"#252d3a", blue:"#7b9cba", green:"#7aab8a", red:"#b07a7a", isDark:true };
 
     const [suppliers, setSuppliers] = useState([]);
@@ -74,9 +75,9 @@ export default function Suppliers() {
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
 
-                    <button onClick={openCreate} style={{ display:"flex", alignItems:"center", gap:7, background:"#b07a7a", border:"none", borderRadius:10, padding:"9px 18px", color:C.isDark?"#0a0f17":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
+                    {canEdit && <button onClick={openCreate} style={{ display:"flex", alignItems:"center", gap:7, background:"#b07a7a", border:"none", borderRadius:10, padding:"9px 18px", color:C.isDark?"#0a0f17":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
                         <span style={{ fontSize:18, lineHeight:1, fontWeight:300 }}>+</span> Furnizor nou
-                    </button>
+                    </button>}
                 </div>
             </div>
 
@@ -124,12 +125,12 @@ export default function Suppliers() {
                                 <td style={{ padding:"14px 20px", fontSize:12, color:C.textDim }}>{fmtDate(s.createdAt)}</td>
                                 <td style={{ padding:"14px 20px", textAlign:"right" }}>
                                     <div className="sup-actions" style={{ display:"flex", gap:6, justifyContent:"flex-end", opacity:0, transition:"opacity 0.15s" }}>
-                                        <button onClick={()=>openEdit(s)} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.textMid, fontSize:12, cursor:"pointer", fontFamily:"'Outfit',sans-serif", display:"flex", alignItems:"center", gap:5 }}>
+                                        {canEdit && <button onClick={()=>openEdit(s)} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:8, padding:"5px 12px", color:C.textMid, fontSize:12, cursor:"pointer", fontFamily:"'Outfit',sans-serif", display:"flex", alignItems:"center", gap:5 }}>
                                             <EditIcon /> Editează
-                                        </button>
-                                        <button onClick={()=>openDel(s)} style={{ background:"transparent", border:"1px solid #b07a7a30", borderRadius:8, padding:"5px 10px", color:"#b07a7a", fontSize:12, cursor:"pointer" }}>
+                                        </button>}
+                                        {canEdit && <button onClick={()=>openDel(s)} style={{ background:"transparent", border:"1px solid #b07a7a30", borderRadius:8, padding:"5px 10px", color:"#b07a7a", fontSize:12, cursor:"pointer" }}>
                                             <DeleteIcon />
-                                        </button>
+                                        </button>}
                                     </div>
                                 </td>
                             </tr>

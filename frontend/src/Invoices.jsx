@@ -25,8 +25,9 @@ function plusDays(n){ const d = new Date(); d.setDate(d.getDate() + n); return d
 const EMPTY_ITEM = { description: "", quantity: "1", unitPrice: "", accountId: null };
 const EMPTY_FORM = { clientId: "", taxRateId: "", issueDate: today(), dueDate: plusDays(30), notes: "", items: [{ ...EMPTY_ITEM }] };
 
-export default function Invoices() {
+export default function Invoices({ role }) {
     const T = useTheme();
+    const canEdit = role !== "VIEWER";
     const C = T ?? {
         text: "#d4d8e0", textMid: "#6b7280", textDim: "#374151",
         bg: "#0f1117", card: "#141820", cardAlt: "#0f1117",
@@ -70,7 +71,7 @@ export default function Invoices() {
                 const all = Array.isArray(d) ? d : [];
                 setRevAccs(all.filter(a => /^[234567]/.test(String(a.code))));
             }).catch(() => {});
-        }, []);
+    }, []);
     // ── Journal entry loader (doar pentru facturi validate)
     const loadJournal = async (inv) => {
         if (!HAS_JOURNAL.includes(inv.status)) return;
@@ -307,14 +308,14 @@ export default function Invoices() {
 
             {/* ── HEADER ── */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
-                <button onClick={openCreate} style={{
+                {canEdit && <button onClick={openCreate} style={{
                     display: "flex", alignItems: "center", gap: 7,
                     background: "#7b9cba", border: "none", borderRadius: 10,
                     padding: "9px 18px", color: C.isDark ? "#0a0f17" : "#fff",
                     fontSize: 13, fontWeight: 600, cursor: "pointer", fontFamily: "'Outfit',sans-serif",
                 }}>
                     <span style={{ fontSize: 18, lineHeight: 1, fontWeight: 300 }}>+</span> Factură nouă
-                </button>
+                </button>}
             </div>
 
             {/* ── FILTER TABS ── */}
@@ -360,6 +361,7 @@ export default function Invoices() {
                         <tbody>
                         {filtered.map((inv, i) => (
                             <InvRow key={inv.id} inv={inv} i={i} C={C}
+                                    canEdit={canEdit}
                                     onClick={() => openView(inv)}
                                     onAction={action} />
                         ))}
@@ -630,23 +632,23 @@ export default function Invoices() {
 
                                         {selected.status === "ISSUED" && (
                                             <>
-                                                <ActionBtn label="✓ Validează factura" color="#7aab8a" onClick={() => action(selected.id, "validate")} C={C} />
-                                                <button onClick={openEdit} style={{ background: C.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", border: `1px solid ${C.border2}`, borderRadius: 9, padding: "8px 16px", color: C.textMid, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
-                                                    ✎ Editează
-                                                </button>
+                                                {canEdit && <><ActionBtn label="✓ Validează factura" color="#7aab8a" onClick={() => action(selected.id, "validate")} C={C} />
+                                                    <button onClick={openEdit} style={{ background: C.isDark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.04)", border: `1px solid ${C.border2}`, borderRadius: 9, padding: "8px 16px", color: C.textMid, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
+                                                        ✎ Editează
+                                                    </button></>}
                                             </>
                                         )}
 
-                                        {selected.status === "VALIDATED" && (
+                                        {selected.status === "VALIDATED" && canEdit && (
                                             <button onClick={unvalidate} style={{ background: "#b09a6a10", border: "1px solid #b09a6a30", borderRadius: 9, padding: "8px 16px", color: "#b09a6a", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
                                                 Devalidează
                                             </button>
                                         )}
 
                                         <div style={{ marginLeft: "auto" }}>
-                                            <button onClick={() => setShowConfirm(true)} style={{ background: "transparent", border: "1px solid #b07a7a40", borderRadius: 9, padding: "8px 16px", color: "#b07a7a", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
+                                            {canEdit && <button onClick={() => setShowConfirm(true)} style={{ background: "transparent", border: "1px solid #b07a7a40", borderRadius: 9, padding: "8px 16px", color: "#b07a7a", fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "'Outfit',sans-serif" }}>
                                                 Șterge factura
-                                            </button>
+                                            </button>}
                                         </div>
                                     </div>
                                 )}
@@ -909,7 +911,7 @@ function TabBtn({ label, active, onClick, C, accent }) {
     );
 }
 
-function InvRow({ inv, i, C, onClick, onAction }) {
+function InvRow({ inv, i, C, canEdit, onClick, onAction }) {
     const s = STATUS[inv.status] || STATUS.ISSUED;
     const isOverdue = inv.status === "VALIDATED" && new Date(inv.dueDate) < new Date();
     return (
@@ -935,7 +937,7 @@ function InvRow({ inv, i, C, onClick, onAction }) {
             <td style={{ padding: "14px 20px", textAlign: "right" }}>
                 <div className="inv-actions" style={{ display: "flex", gap: 6, justifyContent: "flex-end", opacity: 0, transition: "opacity 0.15s" }} onClick={e => e.stopPropagation()}>
                     {/* Buton rapid validare — doar pentru ISSUED */}
-                    {inv.status === "ISSUED" && (
+                    {inv.status === "ISSUED" && canEdit && (
                         <QuickBtn label="Validează" color="#7aab8a" onClick={() => onAction(inv.id, "validate")} />
                     )}
 

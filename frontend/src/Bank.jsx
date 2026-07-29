@@ -4,12 +4,12 @@ import { useState, useEffect } from "react";
 const API_BASE = "http://localhost:8080";
 
 const OP_TYPES = [
-    { value:"COMMISSION",       label:"Comision bancar",  formula:"627 = 5121",        color:"#7b9cba",  hasCustomAccounts: false },
-    { value:"SUPPLIER_PAYMENT", label:"Plată furnizor",   formula:"401 = 5121",        color:"#b07a7a",  hasCustomAccounts: false },
-    { value:"CLIENT_RECEIPT",   label:"Încasare client",  formula:"5121 = 4111",       color:"#7aab8a",  hasCustomAccounts: false },
-    { value:"INTEREST_EXP",     label:"Dobândă plătită",  formula:"666 = 5121",        color:"#b07a7a",  hasCustomAccounts: false },
-    { value:"INTEREST_INC",     label:"Dobândă încasată", formula:"5121 = 766",        color:"#7aab8a",  hasCustomAccounts: false },
-    { value:"OTHER",            label:"Altă operațiune",  formula:"DR ales = CR ales", color:"#6b7280",  hasCustomAccounts: true  },
+    { value:"COMMISSION",       label:"Comision bancar",  formula:"627 = 5121",        color:"",  hasCustomAccounts: false },
+    { value:"SUPPLIER_PAYMENT", label:"Plată furnizor",   formula:"401 = 5121",        color:"",  hasCustomAccounts: false },
+    { value:"CLIENT_RECEIPT",   label:"Încasare client",  formula:"5121 = 4111",       color:"",  hasCustomAccounts: false },
+    { value:"INTEREST_EXP",     label:"Dobândă plătită",  formula:"666 = 5121",        color:"",  hasCustomAccounts: false },
+    { value:"INTEREST_INC",     label:"Dobândă încasată", formula:"5121 = 766",        color:"",  hasCustomAccounts: false },
+    { value:"OTHER",            label:"Altă operațiune",  formula:"DR ales = CR ales", color:"",  hasCustomAccounts: true  },
 ];
 
 function authHeaders() { return { Authorization:`Bearer ${localStorage.getItem("token")}`, "Content-Type":"application/json" }; }
@@ -19,8 +19,9 @@ function today()       { return new Date().toISOString().split("T")[0]; }
 
 const EMPTY_OP = { operationType:"COMMISSION", debitAccountId:"", creditAccountId:"", bankSide:"credit", description:"", amount:"", operationDate:today() };
 
-export default function Bank() {
+export default function Bank({ role }) {
     const T = useTheme();
+    const canEdit = role !== "VIEWER";
     const C = T ?? { text:"#d4d8e0", textMid:"#6b7280", textDim:"#374151", bg:"#0f1117", card:"#141820", border:"#1e2330", border2:"#252d3a", blue:"#7b9cba", green:"#7aab8a", red:"#b07a7a", isDark:true };
 
     const [accounts, setAccounts]               = useState([]);
@@ -210,18 +211,17 @@ export default function Bank() {
             <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:24 }}>
                 <div>
                     <h1 style={{ fontSize:24, fontWeight:700, color:C.text, letterSpacing:"-0.5px", margin:0 }}>Jurnal de Bancă</h1>
-                    <p style={{ fontSize:13, color:C.textDim, marginTop:5 }}>Operațiuni bancare și note contabile automate</p>
                 </div>
                 <div style={{ display:"flex", gap:8 }}>
-                    {selectedAccount && (
+                    {selectedAccount && canEdit && (
                         <button onClick={openOpModal}
                                 style={{ display:"flex", alignItems:"center", gap:7, background:"#7b9cba", border:"none", borderRadius:10, padding:"9px 18px", color:C.isDark?"#0a0f17":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
                             <span style={{ fontSize:18, lineHeight:1, fontWeight:300 }}>+</span> Operațiune nouă
                         </button>
                     )}
-                    <button onClick={()=>setNewAccModal(true)} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:10, padding:"9px 16px", color:C.textMid, fontSize:13, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
+                    {canEdit && <button onClick={()=>setNewAccModal(true)} style={{ background:"transparent", border:`1px solid ${C.border2}`, borderRadius:10, padding:"9px 16px", color:C.textMid, fontSize:13, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
                         + Cont bancar
-                    </button>
+                    </button>}
                 </div>
             </div>
 
@@ -272,10 +272,10 @@ export default function Bank() {
                     <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, padding:"60px", textAlign:"center" }}>
                         <p style={{ fontSize:15, fontWeight:600, color:C.text, margin:"0 0 8px" }}>Nicio operațiune înregistrată</p>
                         <p style={{ fontSize:13, color:C.textDim, margin:"0 0 20px" }}>Înregistrează comisioane, plăți furnizori, încasări sau dobânzi</p>
-                        <button onClick={openOpModal}
-                                style={{ background:"#7b9cba", border:"none", borderRadius:10, padding:"9px 20px", color:C.isDark?"#0a0f17":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
+                        {canEdit && <button onClick={openOpModal}
+                                            style={{ background:"#7b9cba", border:"none", borderRadius:10, padding:"9px 20px", color:C.isDark?"#0a0f17":"#fff", fontSize:13, fontWeight:600, cursor:"pointer", fontFamily:"'Outfit',sans-serif" }}>
                             + Operațiune nouă
-                        </button>
+                        </button>}
                     </div>
                 ) : (
                     <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16, overflow:"hidden" }}>
@@ -452,7 +452,7 @@ export default function Bank() {
                                 </div>
                             )}
 
-                            <FInput label="Descriere (auto-completată dacă e goală)" val={opForm.description} set={v=>setOpForm(f=>({...f,description:v}))} ph="Ex: Plată factură SINV-2026-00001..." C={C} />
+                            <FInput label="Descriere " val={opForm.description} set={v=>setOpForm(f=>({...f,description:v}))} ph="" C={C} />
 
                             <div style={{ display:"flex", gap:12 }}>
                                 <FInput label="Sumă (RON) *" val={opForm.amount} set={v=>setOpForm(f=>({...f,amount:v}))} type="number" ph="0.00" C={C} />
@@ -503,7 +503,7 @@ export default function Bank() {
                         </div>
 
                         {/* Buton anulare — disponibil pentru orice operatiune */}
-                        <div style={{ borderTop:`1px solid ${C.border}`, padding:"14px 24px", display:"flex", justifyContent:"flex-end" }}>
+                        {canEdit && <div style={{ borderTop:`1px solid ${C.border}`, padding:"14px 24px", display:"flex", justifyContent:"flex-end" }}>
                             <button onClick={()=>setShowConfirmOp(true)} style={{
                                 background:"#b07a7a0d", border:"1px solid #b07a7a30",
                                 borderRadius:9, padding:"8px 16px", color:"#b07a7a",
@@ -511,7 +511,7 @@ export default function Bank() {
                             }}>
                                 Anuleaza operatiunea
                             </button>
-                        </div>
+                        </div>}
                     </div>
                 </Overlay>
             )}

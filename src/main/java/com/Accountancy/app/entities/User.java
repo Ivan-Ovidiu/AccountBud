@@ -1,4 +1,5 @@
 package com.Accountancy.app.entities;
+
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -31,15 +32,19 @@ public class User {
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
+    // ── OAuth2 approval status ────────────────────────────────────────────────
+    // PENDING  → new Google user, waiting for admin approval
+    // ACTIVE   → approved, can log in
+    // REJECTED → rejected by admin
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Status status = Status.ACTIVE;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
-//INVERSE SIDE RELATIONS:
-//An user can have more journal entries
-//An user can have more invoices
-//An user can have more expenses
-//An user can have more bank accounts
+    // ── Relations ─────────────────────────────────────────────────────────────
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<JournalEntry> journalEntries;
 
@@ -54,5 +59,9 @@ public class User {
 
     public enum Role {
         ADMIN, ACCOUNTANT, VIEWER
+    }
+
+    public enum Status {
+        PENDING, ACTIVE, REJECTED
     }
 }

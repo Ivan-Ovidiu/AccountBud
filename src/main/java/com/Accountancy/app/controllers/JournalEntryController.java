@@ -5,6 +5,7 @@ import com.Accountancy.app.entities.JournalLine;
 import com.Accountancy.app.services.JournalEntryService;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -45,6 +46,7 @@ public class JournalEntryController {
 
     // POST /api/journal-entries
     @PostMapping
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<JournalEntryResponse> create(
             @RequestBody CreateJournalEntryRequest request) {
         JournalEntry entry = journalEntryService.createManualEntry(request);
@@ -65,6 +67,7 @@ public class JournalEntryController {
     // POST /api/journal-entries/close-period?year=2026&month=5
     // Returneaza nota unica de inchidere (model SAGA)
     @PostMapping("/close-period")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<JournalEntryResponse> closePeriod(
             @RequestParam int year,
             @RequestParam(defaultValue = "0") int month) {
@@ -75,6 +78,7 @@ public class JournalEntryController {
     // DELETE /api/journal-entries/close-period?year=2026&month=5
     // Devalidare — sterge nota din DB, dispare din toate rapoartele
     @DeleteMapping("/close-period")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> cancelClosePeriod(
             @RequestParam int year,
             @RequestParam(defaultValue = "0") int month) {

@@ -8,7 +8,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+import org.springframework.security.access.prepost.PreAuthorize;
 import java.util.List;
 
 @RestController
@@ -41,6 +41,7 @@ public class ClientController {
     }
 
     // POST /api/clients
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     @PostMapping
     public ResponseEntity<ClientResponse> createClient(@Valid @RequestBody ClientRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED)
@@ -49,6 +50,7 @@ public class ClientController {
 
     // PUT /api/clients/{id}
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<ClientResponse> updateClient(@PathVariable Integer id,
                                                        @Valid @RequestBody ClientRequest request) {
         return ResponseEntity.ok(clientService.updateClient(id, request));
@@ -56,6 +58,7 @@ public class ClientController {
 
     // DELETE /api/clients/{id}  — soft delete
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deactivateClient(@PathVariable Integer id) {
         clientService.deactivateClient(id);
         return ResponseEntity.noContent().build();

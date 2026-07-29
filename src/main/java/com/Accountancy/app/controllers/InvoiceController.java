@@ -11,6 +11,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.access.prepost.PreAuthorize;
 
 import java.util.List;
 import java.util.Map;
@@ -58,42 +59,49 @@ public class InvoiceController {
 
     @Operation(summary = "Create a new invoice with status ISSUED")
     @PostMapping
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<InvoiceResponse> createInvoice(@Valid @RequestBody InvoiceRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(invoiceService.createInvoice(request));
     }
 
     @Operation(summary = "Validate invoice: ISSUED → VALIDATED. Posts journal entry.")
     @PostMapping("/{id}/validate")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<InvoiceResponse> validateInvoice(@PathVariable Integer id) {
         return ResponseEntity.ok(invoiceService.validateInvoice(id));
     }
 
     @Operation(summary = "Unvalidate invoice: VALIDATED → ISSUED. Deletes journal entry.")
     @PostMapping("/{id}/unvalidate")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<InvoiceResponse> unvalidateInvoice(@PathVariable Integer id) {
         return ResponseEntity.ok(invoiceService.unvalidateInvoice(id));
     }
 
     @Operation(summary = "Mark invoice as paid: VALIDATED / OVERDUE → PAID")
     @PostMapping("/{id}/pay")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<InvoiceResponse> markAsPaid(@PathVariable Integer id) {
         return ResponseEntity.ok(invoiceService.markAsPaid(id));
     }
 
     @Operation(summary = "Void invoice")
     @PostMapping("/{id}/void")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<InvoiceResponse> voidInvoice(@PathVariable Integer id) {
         return ResponseEntity.ok(invoiceService.voidInvoice(id));
     }
 
     @Operation(summary = "Check and mark overdue invoices")
     @PostMapping("/check-overdue")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Map<String, Integer>> checkOverdue() {
         return ResponseEntity.ok(Map.of("updatedCount", invoiceService.checkAndMarkOverdue()));
     }
 
     @Operation(summary = "Update invoice: only ISSUED invoices can be edited")
     @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<InvoiceResponse> updateInvoice(@PathVariable Integer id,
                                                          @Valid @RequestBody InvoiceUpdateRequest request) {
         return ResponseEntity.ok(invoiceService.updateInvoice(id, request));
@@ -101,6 +109,7 @@ public class InvoiceController {
 
     @Operation(summary = "Delete invoice: removes journal entry and bank operation if needed")
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ACCOUNTANT', 'ADMIN')")
     public ResponseEntity<Void> deleteInvoice(@PathVariable Integer id) {
         invoiceService.deleteInvoice(id);
         return ResponseEntity.noContent().build();

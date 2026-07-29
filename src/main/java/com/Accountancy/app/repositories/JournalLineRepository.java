@@ -124,6 +124,11 @@ public interface JournalLineRepository extends JpaRepository<JournalLine, Intege
             @Param("from") LocalDate from,
             @Param("to") LocalDate to);
 
+    @Query("SELECT jl FROM JournalLine jl JOIN FETCH jl.journalEntry WHERE jl.journalEntry.company.id = :companyId")
+    List<JournalLine> findAllWithJournalEntryByCompanyId(@Param("companyId") Integer companyId);
+
+
+
     @Modifying
     @Query("DELETE FROM JournalLine jl WHERE jl.journalEntry.company.id = :companyId")
     void deleteByCompanyId(@Param("companyId") Integer companyId);
