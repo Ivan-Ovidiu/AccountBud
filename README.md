@@ -52,6 +52,38 @@ The overall system follows a layered design across frontend, backend, database, 
 
 ---
 
+## Account classification - rate of success evaluation
+
+The classifier was evaluated using repeated stratified 5-fold
+cross-validation (100 train/test cycles) across 143 transactions
+spanning 30 account codes drawn from the Romanian Chart of Accounts
+(OMFP 1802/2014).
+
+On the 17 account codes with sufficient samples for stratified CV, the
+model achieved a mean accuracy of 89.73% (± 5.89 percentage points) and
+a macro F1-score of 0.88, indicating balanced performance rather than
+skew toward frequent classes.
+
+High-frequency, well-separated categories were classified
+near-perfectly:
+
+-   Utilities (6051): 100%
+-   Local taxes (635): 100%
+-   Depreciation (6811): 98.3%
+-   Fuel expenses (6022): 98.7%
+
+  Main source of error: Semantic overlap between adjacent
+  bank/client/supplier movements (5121, 4111) and general third-party
+  services (628), which acts as a catch-all category the model sometimes
+  over-predicts.
+
+For the 13 account codes with fewer than 5 training samples,
+leave-one-out evaluation showed markedly lower reliability (48.3%). This
+is expected given the limited data and highlights an area for future
+data collection rather than a modeling flaw.
+
+---
+
 ## Repository Structure
 ```
 ├── src/                          # Spring Boot Backend Codebase
