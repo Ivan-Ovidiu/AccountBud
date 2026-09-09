@@ -1,6 +1,6 @@
 # AccountBud
 
-AccountBud is an integrated double-entry accounting web platform designed for Small and Medium-Sized Enterprises (SMEs) operating under Romanian financial regulations. Implemented in accordance with the OMFP 1802/2014 accounting guidelines, the platform automates journal entries, supports multi-company management, and integrates a Machine Learning microservice for automated account code predictions and transaction anomaly detection.
+AccountBud is an integrated double-entry accounting web platform designed for Small and Medium-Sized Enterprises (SMEs) operating under Romanian financial regulations. Implemented in accordance with the OMFP 1802/2014 accounting guidelines, the platform automates journal entries, supports multi-company management, and integrates a Machine Learning microservice for automated account code predictions and transaction anomaly detection. For a high-level view of how the pieces fit together, see the [General Architecture](#fig-general-architecture) diagram.
 
 ## Dashboard preview
 
@@ -15,10 +15,10 @@ AccountBud is an integrated double-entry accounting web platform designed for Sm
 
 * **Double-Entry Bookkeeping:** Automatically generates balanced journal entries compliant with OMFP 1802/2014 for issued/received invoices, bank transactions, and month-end closing routines.
 * **AI-Assisted Account Prediction:** Uses a Machine Learning model trained on Romanian accounting data to suggest appropriate accounting account codes based on transaction descriptions in real time (see [Figure 2](#fig-ai-prediction)).
-* **Active Learning Feedback Loop:** Dynamically updates and retrains the AI model based on user validation and corrections.
+* **Active Learning Feedback Loop:** Dynamically updates and retrains the AI model based on user validation and corrections (implementation shown in [Listing 3.2](#listing-3-2)).
 * **Anomaly Detection:** Applies an Isolation Forest algorithm to flag irregular accounting entries and potential data input errors (see [Figure 3](#fig-anomaly)).
 * **Multi-Company Management:** Provides centralized administrative capabilities across multiple business entities with strict database isolation (see [Figure 4](#fig-company-switcher)).
-* **Role-Based Access Control (RBAC):** Secures application access via JSON Web Tokens (JWT) across three distinct privilege levels: `Admin`, `Accountant`, and `Viewer`.
+* **Role-Based Access Control (RBAC):** Secures application access via JSON Web Tokens (JWT) across three distinct privilege levels: `Admin`, `Accountant`, and `Viewer` (see the [authentication flow](#fig-auth-flow)).
 * **Financial Reporting Suite:** Generates key standardized financial documents:
   * **Financial Statements:** Profit & Loss Statement, Balance Sheet
   * **Accounting Registers:** Trial Balance (Balanță de verificare), Account Ledger (Fișă de cont), General Journal (see [Figure 5](#fig-journal))
@@ -30,11 +30,13 @@ AccountBud is an integrated double-entry accounting web platform designed for Sm
 
 ## Tech Stack
 
+The overall system follows a layered design across frontend, backend, database, and ML service — see [Figure 7](#fig-general-architecture) for the general architecture and [Figure 8](#fig-app-layers) for how the application layers are organized.
+
 ### Backend
 * **Language/Framework:** Java 17+, Spring Boot
-* **Security:** Spring Security, JWT, Google OAuth2
+* **Security:** Spring Security, JWT, Google OAuth2 (see the [authentication flow](#fig-auth-flow) in Figure 9)
 * **Data Access & Migration:** Spring Data JPA, Hibernate, Flyway DB
-* **Database Management System:** Microsoft SQL Server
+* **Database Management System:** Microsoft SQL Server (see the [database schema](#fig-db-schema) in Figure 11)
 
 ### Frontend
 * **Framework:** React, Vite
@@ -46,6 +48,7 @@ AccountBud is an integrated double-entry accounting web platform designed for Sm
   * `RandomForestClassifier` (200 estimators) for account classification
   * `IsolationForest` for anomaly detection
 * **NLP / Feature Processing:** TF-IDF Vectorizer and Keyword Analysis
+* **Architecture:** see [Figure 10](#fig-ml-architecture) for the microservice architecture and [Listing 3.2](#listing-3-2) for the feedback/retraining endpoint.
 
 ---
 
@@ -75,6 +78,8 @@ AccountBud is an integrated double-entry accounting web platform designed for Sm
     └── scaler.pkl                # Feature scaling model instance
 ```
 
+This structure maps directly onto the [application layers](#fig-app-layers) shown in Figure 8.
+
 ---
 
 ## Installation and Deployment
@@ -86,7 +91,7 @@ AccountBud is an integrated double-entry accounting web platform designed for Sm
 * Microsoft SQL Server instance running on port `1433`
 
 ### 1. Database Configuration
-Create a database instance named `AccountBud` in MS SQL Server. Schema migrations will be executed automatically by Flyway upon backend initialization.
+Create a database instance named `AccountBud` in MS SQL Server. Schema migrations will be executed automatically by Flyway upon backend initialization. See [Figure 11](#fig-db-schema) for the full database schema.
 
 ### 2. Machine Learning Microservice Setup
 ```bash
@@ -143,8 +148,87 @@ python app.py
 
 <a id="fig-theme"></a>
 
-
 https://github.com/user-attachments/assets/e9c95a24-2b70-4653-83c7-1543d2cd0c2f
 
-
 *Figure 6: Theme toggle demo.*
+
+---
+
+## System Architecture
+
+This section details the overall system design: how the frontend, backend, database, and ML service communicate, how the application is layered, how authentication flows through the system, the ML microservice's internal architecture, and the underlying database schema.
+
+### General Architecture
+
+An overview diagram showing the frontend, backend, SQL database, and ML component, and how they communicate with one another.
+
+<a id="fig-general-architecture"></a>
+<img width="867" height="370" alt="General architecture diagram" src="https://github.com/user-attachments/assets/6dee3d0a-c967-4089-847d-e8a375046228" />
+
+*Figure 7: General architecture — frontend, backend, database, and ML service interaction.*
+
+### Application Layers
+
+<a id="fig-app-layers"></a>
+<img width="939" height="251" alt="Application layers" src="https://github.com/user-attachments/assets/7820b41e-63b3-434b-85ec-75ad848de246" />
+
+*Figure 8: Application layers.*
+
+### Authentication Flow
+
+<a id="fig-auth-flow"></a>
+<img width="789" height="965" alt="Authentication flow" src="https://github.com/user-attachments/assets/66c7178b-7c01-4821-b74f-39e3ee6ed68b" />
+
+*Figure 9: Authentication flow.*
+
+
+### ML Microservice Architecture for Account Code Prediction
+
+<a id="fig-ml-architecture"></a>
+<img width="941" height="272" alt="ML microservice architecture" src="https://github.com/user-attachments/assets/c971a93b-87d4-4ff3-9fbe-f1b48f79a083" />
+
+*Figure 10: ML microservice architecture for account code prediction.*
+
+<a id="listing-3-2"></a>
+**Listing :** Feedback endpoint and automatic retraining of the ML model
+
+```python
+@app.route("/feedback", methods=["POST"])
+def feedback():
+    global classifier
+
+    body            = request.get_json(force=True)
+    description     = body.get("description", "")
+    amount          = float(body.get("amount", 0))
+    correct_account = body.get("correct_account", "")
+    row = pd.DataFrame([{
+        "description":     description,
+        "amount":          amount,
+        "correct_account": correct_account,
+    }])
+    header = not os.path.exists(FEEDBACK_CSV)
+    row.to_csv(FEEDBACK_CSV, mode="a", header=header, index=False)
+    X_before, y_before = build_training_set()
+    acc_before = round(accuracy_score(y_before,
+                       classifier.predict(X_before)), 4)
+    classifier = train_classifier()
+
+    X_after, y_after = build_training_set()
+    acc_after = round(accuracy_score(y_after,
+                      classifier.predict(X_after)), 4)
+
+    return jsonify({
+        "retrained":        True,
+        "accuracy_before":  acc_before,
+        "accuracy_after":   acc_after,
+        "training_samples": len(y_after),
+    })
+```
+
+
+### Database Schema
+
+<a id="fig-db-schema"></a>
+<img width="939" height="1017" alt="Database schema" src="https://github.com/user-attachments/assets/be6de0ea-7bb5-4a80-b522-ffdb0895c249" />
+
+*Figure 11: Database schema.*
