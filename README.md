@@ -1,6 +1,6 @@
 # AccountBud
 
-AccountBud is an integrated double-entry accounting web platform designed specifically for Small and Medium-Sized Enterprises (SMEs) operating under Romanian financial regulations. Implemented in accordance with the OMFP 1802/2014 accounting guidelines[cite: 1], the platform automates journal entries, supports multi-company management[cite: 1], and integrates a Machine Learning microservice for automated account code predictions and transaction anomaly detection.
+AccountBud is an integrated double-entry accounting web platform designed for Small and Medium-Sized Enterprises (SMEs) operating under Romanian financial regulations. Implemented in accordance with the OMFP 1802/2014 accounting guidelines, the platform automates journal entries, supports multi-company management, and integrates a Machine Learning microservice for automated account code predictions and transaction anomaly detection.
 
 ---
 
