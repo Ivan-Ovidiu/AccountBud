@@ -258,7 +258,7 @@ def feedback():
 ```
 
 
-### Database Schema
+### Database Schema ( Simplified )
 
 <a id="fig-db-schema"></a>
 <img width="939" height="1017" alt="Database schema" src="https://github.com/user-attachments/assets/be6de0ea-7bb5-4a80-b522-ffdb0895c249" />
